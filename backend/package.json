@@ -1,0 +1,15 @@
+{
+  "name": "canteen-backend",
+  "version": "1.0.0",
+  "description": "School Canteen Management API",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "nodemon src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "seed": "ts-node src/seeds/seed.ts"
+  },
+  "keywords": ["canteen", "school", "management", "burkina-faso"],
+  "author": "Your Team Name",
+  "license": "MIT"
+}
