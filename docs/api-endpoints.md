@@ -1,4 +1,4 @@
-# API Documentation - Canteen Management System
+# API Documentation - Cafeteria Management System
 
 ## Base URL
 ```
@@ -7,10 +7,10 @@ http://localhost:5000/api
 
 ## Authentication Endpoints
 
-### 1. Register (Inscription)
+### 1. Register
 **POST** `/auth/register`
 
-**Description:** Créer un nouveau compte utilisateur
+**Description:** Create a new user account
 
 **Request Body:**
 ```json
@@ -28,7 +28,7 @@ http://localhost:5000/api
 ```json
 {
   "success": true,
-  "message": "Compte créé avec succès",
+  "message": "Account created successfully",
   "data": {
     "id": 1,
     "email": "user@example.com",
@@ -41,15 +41,15 @@ http://localhost:5000/api
 ```
 
 **Errors:**
-- 400: Email déjà utilisé
-- 422: Données invalides
+- 400: Email already in use
+- 422: Invalid data
 
 ---
 
-### 2. Login (Connexion)
+### 2. Login
 **POST** `/auth/login`
 
-**Description:** Se connecter à l'application
+**Description:** Login to the application
 
 **Request Body:**
 ```json
@@ -63,7 +63,7 @@ http://localhost:5000/api
 ```json
 {
   "success": true,
-  "message": "Connexion réussie",
+  "message": "Login successful",
   "data": {
     "id": 1,
     "email": "user@example.com",
@@ -76,8 +76,8 @@ http://localhost:5000/api
 ```
 
 **Errors:**
-- 401: Email ou mot de passe incorrect
-- 404: Utilisateur non trouvé
+- 401: Email or password incorrect
+- 404: User not found
 
 ---
 
@@ -114,9 +114,9 @@ Authorization: Bearer {token}
 **Headers:** `Authorization: Bearer {token}`
 
 **Query Parameters:**
-- `page` (optional): Numéro de page (default: 1)
-- `limit` (optional): Nombre par page (default: 10)
-- `city` (optional): Filtrer par ville
+- `page` (optional): Page number (default: 1)
+- `limit` (optional): Number per page (default: 10)
+- `city` (optional): Filter by city
 
 **Response (200):**
 ```json
@@ -150,7 +150,7 @@ Authorization: Bearer {token}
 ### 2. Create School
 **POST** `/schools`
 
-**Roles autorisés:** SUPER_ADMIN
+**Authorized Roles:** SUPER_ADMIN
 
 **Request Body:**
 ```json
@@ -166,7 +166,7 @@ Authorization: Bearer {token}
 ```json
 {
   "success": true,
-  "message": "École créée avec succès",
+  "message": "School created successfully",
   "data": {
     "id": 2,
     "name": "École Primaire de Bobo",
@@ -207,7 +207,7 @@ Authorization: Bearer {token}
 ### 4. Update School
 **PUT** `/schools/:id`
 
-**Roles autorisés:** SUPER_ADMIN, SCHOOL_ADMIN (only their school)
+**Authorized Roles:** SUPER_ADMIN, SCHOOL_ADMIN (only their school)
 
 **Request Body:**
 ```json
@@ -222,13 +222,13 @@ Authorization: Bearer {token}
 ### 5. Delete School
 **DELETE** `/schools/:id`
 
-**Roles autorisés:** SUPER_ADMIN
+**Authorized Roles:** SUPER_ADMIN
 
 **Response (200):**
 ```json
 {
   "success": true,
-  "message": "École supprimée avec succès"
+  "message": "School deleted successfully"
 }
 ```
 
@@ -240,9 +240,9 @@ Authorization: Bearer {token}
 **GET** `/students`
 
 **Query Parameters:**
-- `school_id` (optional): Filtrer par école
-- `parent_id` (optional): Filtrer par parent
-- `class_name` (optional): Filtrer par classe
+- `school_id` (optional): Filter by school
+- `parent_id` (optional): Filter by parent
+- `class_name` (optional): Filter by class
 
 **Response (200):**
 ```json
@@ -291,7 +291,7 @@ Authorization: Bearer {token}
 ### 3. Get Students by Parent
 **GET** `/students/parent/:parentId`
 
-**Description:** Récupérer tous les enfants d'un parent
+**Description:** Retrieve all children of a parent
 
 **Response (200):**
 ```json
@@ -337,9 +337,9 @@ Authorization: Bearer {token}
 **GET** `/menus`
 
 **Query Parameters:**
-- `school_id` (required): ID de l'école
-- `start_date` (optional): Date de début (YYYY-MM-DD)
-- `end_date` (optional): Date de fin (YYYY-MM-DD)
+- `school_id` (required): School ID
+- `start_date` (optional): Start date (YYYY-MM-DD)
+- `end_date` (optional): End date (YYYY-MM-DD)
 - `meal_type` (optional): BREAKFAST, LUNCH, DINNER
 
 **Response (200):**
@@ -365,7 +365,7 @@ Authorization: Bearer {token}
 ### 2. Get Week Menu
 **GET** `/menus/week/:schoolId`
 
-**Description:** Récupérer le menu de la semaine en cours
+**Description:** Retrieve the current week's menu
 
 **Response (200):**
 ```json
@@ -402,7 +402,7 @@ Authorization: Bearer {token}
 ### 3. Create Menu
 **POST** `/menus`
 
-**Roles autorisés:** SCHOOL_ADMIN, CANTEEN_MANAGER
+**Authorized Roles:** SCHOOL_ADMIN, CANTEEN_MANAGER
 
 **Request Body:**
 ```json
@@ -451,11 +451,11 @@ Authorization: Bearer {token}
 }
 ```
 
-**Note:** `end_date` est calculé automatiquement selon le type:
-- DAILY: +1 jour
-- WEEKLY: +7 jours
-- MONTHLY: +30 jours
-- TRIMESTER: +90 jours
+**Note:** `end_date` is calculated automatically according to the type:
+- DAILY: +1 day
+- WEEKLY: +7 days
+- MONTHLY: +30 days
+- TRIMESTER: +90 days
 
 ---
 
@@ -533,14 +533,14 @@ Authorization: Bearer {token}
 }
 ```
 
-**Note:** En développement, le paiement est simulé. En production, intégrer l'API Orange Money/Moov Money.
+**Note:** In development, payment is simulated. In production, integrate Orange Money/Moov Money API.
 
 ---
 
 ### 3. Verify Payment
 **GET** `/payments/:id/verify`
 
-**Description:** Vérifier le statut d'un paiement
+**Description:** Check the status of a payment
 
 ---
 
@@ -642,17 +642,17 @@ Authorization: Bearer {token}
 
 ## Error Responses
 
-Tous les endpoints peuvent retourner ces erreurs:
+All endpoints can return these errors:
 
 ### 400 Bad Request
 ```json
 {
   "success": false,
-  "message": "Données invalides",
+  "message": "Invalid data",
   "errors": [
     {
       "field": "email",
-      "message": "Email invalide"
+      "message": "Invalid email"
     }
   ]
 }
@@ -662,7 +662,7 @@ Tous les endpoints peuvent retourner ces erreurs:
 ```json
 {
   "success": false,
-  "message": "Non authentifié. Token manquant ou invalide."
+  "message": "Not authenticated. Token missing or invalid."
 }
 ```
 
@@ -670,7 +670,7 @@ Tous les endpoints peuvent retourner ces erreurs:
 ```json
 {
   "success": false,
-  "message": "Accès refusé. Permissions insuffisantes."
+  "message": "Access denied. Insufficient permissions."
 }
 ```
 
@@ -678,7 +678,7 @@ Tous les endpoints peuvent retourner ces erreurs:
 ```json
 {
   "success": false,
-  "message": "Ressource non trouvée"
+  "message": "Resource not found"
 }
 ```
 
@@ -686,7 +686,7 @@ Tous les endpoints peuvent retourner ces erreurs:
 ```json
 {
   "success": false,
-  "message": "Erreur serveur. Veuillez réessayer plus tard."
+  "message": "Server error. Please try again later."
 }
 ```
 
@@ -695,7 +695,7 @@ Tous les endpoints peuvent retourner ces erreurs:
 ## Authentication & Authorization
 
 ### JWT Token
-Tous les endpoints (sauf `/auth/register` et `/auth/login`) nécessitent un token JWT dans le header:
+All endpoints (except `/auth/register` and `/auth/login`) require a JWT token in the header:
 ```
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```

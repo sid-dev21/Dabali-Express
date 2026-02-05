@@ -1,6 +1,6 @@
 # Development Plan - 10 Days Sprint
 
-## Team Structure (Exemple pour 3 personnes)
+## Team Structure (Example for 3 people)
 
 **Person 1 - Backend Developer:**
 - API Development
@@ -218,9 +218,9 @@ dabali-express/
 ├── 📁 backend/                                 # API Backend (Node.js + TypeScript)
 │   ├── 📁 src/
 │   │   ├── 📁 config/
-│   │   │   └── 📄 database.ts                 # Configuration PostgreSQL
+│   │   │   └── 📄 database.ts                 # PostgreSQL Configuration
 │   │   │
-│   │   ├── 📁 controllers/                    # Logique métier (Business Logic)
+│   │   ├── 📁 controllers/                    # Business Logic
 │   │   │   ├── 📄 authController.ts           # Login, Register, JWT
 │   │   │   ├── 📄 userController.ts           # CRUD Users
 │   │   │   ├── 📄 schoolController.ts         # CRUD Schools
@@ -258,7 +258,7 @@ dabali-express/
 │   │   │   ├── 📄 Payment.ts                  # Payment type
 │   │   │   └── 📄 Attendance.ts               # Attendance type
 │   │   │
-│   │   ├── 📁 utils/                          # Fonctions utilitaires
+│   │   ├── 📁 utils/                          # Utility functions
 │   │   │   ├── 📄 validators.ts               # Validation schemas (Joi/Zod)
 │   │   │   ├── 📄 helpers.ts                  # Helper functions
 │   │   │   ├── 📄 hashPassword.ts             # Password hashing
@@ -280,7 +280,7 @@ dabali-express/
 │   │   │
 │   │   └── 📄 server.ts                       # Main entry point (Express app)
 │   │
-│   ├── 📁 tests/                              # Tests unitaires (optional pour 10 jours)
+│   ├── 📁 tests/                              # Unit tests (optional for 10 days)
 │   │   ├── 📄 auth.test.ts
 │   │   ├── 📄 schools.test.ts
 │   │   └── 📄 students.test.ts
