@@ -1,0 +1,6 @@
+
+{
+  "name": "Dabali Express Admin",
+  "description": "Système de gestion de cantine scolaire pour les écoles au Burkina Faso. Interface d'administration pour Super Admins, Écoles et Gestionnaires.",
+  "requestFramePermissions": []
+}
