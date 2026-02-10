@@ -12,10 +12,10 @@ const router = Router();
 // All routes require authentication
 router.use(authMiddleware);
 
-// Get attendance records
-router.get('/', getAttendance);
+// Get attendance records (SCHOOL_ADMIN, CANTEEN_MANAGER)
+router.get('/', requireRole(UserRole.SCHOOL_ADMIN, UserRole.CANTEEN_MANAGER), getAttendance);
 
-// Mark attendance (SCHOOL_ADMIN or CANTEEN_MANAGER)
-router.post('/mark', requireRole(UserRole.SCHOOL_ADMIN, UserRole.CANTEEN_MANAGER), markAttendance);
+// Mark attendance (CANTEEN_MANAGER only)
+router.post('/mark', requireRole(UserRole.CANTEEN_MANAGER), markAttendance);
 
 export default router;

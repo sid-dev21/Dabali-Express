@@ -16,6 +16,7 @@ import subscriptionRoutes from './routes/subscriptionRoutes';
 import paymentRoutes from './routes/paymentRoutes';
 import attendanceRoutes from './routes/attendanceRoutes';
 import reportRoutes from './routes/reportRoutes';
+import notificationRoutes from './routes/notificationRoutes';
 
 // Import error handler
 import { errorHandler, notFound } from './middlewares/errorHandler';
@@ -68,6 +69,7 @@ app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // 404 handler (must be before error handler)
 app.use(notFound);

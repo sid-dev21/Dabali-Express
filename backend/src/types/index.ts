@@ -44,6 +44,20 @@ export enum MealType {
   DINNER = 'DINNER',
 }
 
+export enum MenuStatus {
+  PENDING = 'PENDING',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+}
+
+export enum NotificationType {
+  MEAL_TAKEN = 'MEAL_TAKEN',
+  MEAL_MISSED = 'MEAL_MISSED',
+  MENU_APPROVED = 'MENU_APPROVED',
+  MENU_REJECTED = 'MENU_REJECTED',
+  ABSENCE = 'ABSENCE',
+}
+
 /* Interfaces: structures for various entities in the system */
 
 export interface User {
@@ -93,7 +107,13 @@ export interface Menu {
   description?: string;
   items?: string[]; // JSON array
   allergens?: string[]; // Allergens present in the menu
+  status: MenuStatus;
+  created_by: number;
+  approved_by?: number;
+  approved_at?: Date;
+  rejection_reason?: string;
   created_at: Date;
+  updated_at: Date;
 }
 
 export interface Subscription {
@@ -130,6 +150,18 @@ export interface Attendance {
   reason?: string; // Reason for a justified absence
   marked_by?: number;
   marked_at: Date;
+}
+
+export interface Notification {
+  id: number;
+  user_id: number;
+  title: string;
+  message: string;
+  type: NotificationType;
+  related_student_id?: number;
+  related_menu_id?: number;
+  read: boolean;
+  created_at: Date;
 }
 
 /* DTO (Data Transfer Objects): structures for requests and responses */
@@ -172,6 +204,11 @@ export interface CreateMenuDTO {
   description?: string;
   items?: string[];
   allergens?: string[];
+}
+
+export interface ApproveMenuDTO {
+  approved: boolean;
+  rejection_reason?: string;
 }
 
 export interface CreateSubscriptionDTO {

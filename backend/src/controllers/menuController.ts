@@ -6,7 +6,7 @@
 
 import { Request, Response } from 'express';
 import pool from '../config/database';
-import { ApiResponse, CreateMenuDTO, MealType } from '../types';
+import { ApiResponse, CreateMenuDTO, MealType, MenuStatus, ApproveMenuDTO } from '../types';
 import { formatDateForDB } from '../utils/helpers';
 import { isValidDate } from '../utils/validators';
 
@@ -243,8 +243,8 @@ export const createMenu = async (req: Request, res: Response): Promise<void> => 
     }
 
     const result = await pool.query(
-      `INSERT INTO menus (school_id, date, meal_type, description, items, allergens)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO menus (school_id, date, meal_type, description, items, allergens, status, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
       [
         school_id,
@@ -253,6 +253,8 @@ export const createMenu = async (req: Request, res: Response): Promise<void> => 
         description || null,
         JSON.stringify(items || []),
         allergens || null,
+        MenuStatus.PENDING,
+        req.user?.id
       ]
     );
 
@@ -389,6 +391,129 @@ export const deleteMenu = async (req: Request, res: Response): Promise<void> => 
     res.status(500).json({
       success: false,
       message: 'Error deleting menu.',
+    } as ApiResponse);
+  }
+};
+
+/**
+ * GET PENDING MENUS - Get menus pending approval
+ * GET /api/menus/pending
+ */
+export const getPendingMenus = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const school_id = req.query.school_id as string;
+
+    let query = `
+      SELECT m.*, sc.name as school_name, u.first_name as creator_first_name, u.last_name as creator_last_name,
+             COALESCE(m.allergens, '[]'::json) as allergens
+      FROM menus m
+      JOIN schools sc ON m.school_id = sc.id
+      JOIN users u ON m.created_by = u.id
+      WHERE m.status = $1
+    `;
+
+    const params: any[] = [MenuStatus.PENDING];
+
+    if (school_id) {
+      query += ` AND m.school_id = $2`;
+      params.push(school_id);
+    }
+
+    query += ' ORDER BY m.created_at ASC';
+
+    const result = await pool.query(query, params);
+
+    res.status(200).json({
+      success: true,
+      data: result.rows,
+    } as ApiResponse);
+  } catch (error) {
+    console.error('Get pending menus error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error retrieving pending menus.',
+    } as ApiResponse);
+  }
+};
+
+/**
+ * APPROVE MENU - Approve or reject a menu
+ * PUT /api/menus/:id/approve
+ */
+export const approveMenu = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { approved, rejection_reason }: ApproveMenuDTO = req.body;
+
+    if (typeof approved !== 'boolean') {
+      res.status(400).json({
+        success: false,
+        message: 'Approved field is required and must be boolean.',
+      } as ApiResponse);
+      return;
+    }
+
+    if (!approved && !rejection_reason) {
+      res.status(400).json({
+        success: false,
+        message: 'Rejection reason is required when rejecting a menu.',
+      } as ApiResponse);
+      return;
+    }
+
+    // Check if menu exists and is pending
+    const existingMenu = await pool.query(
+      'SELECT * FROM menus WHERE id = $1 AND status = $2',
+      [id, MenuStatus.PENDING]
+    );
+
+    if (existingMenu.rows.length === 0) {
+      res.status(404).json({
+        success: false,
+        message: 'Menu not found or already processed.',
+      } as ApiResponse);
+      return;
+    }
+
+    const menu = existingMenu.rows[0];
+    const newStatus = approved ? MenuStatus.APPROVED : MenuStatus.REJECTED;
+
+    const result = await pool.query(
+      `UPDATE menus 
+       SET status = $1, approved_by = $2, approved_at = CURRENT_TIMESTAMP, rejection_reason = $3, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $4
+       RETURNING *`,
+      [newStatus, req.user?.id, rejection_reason || null, id]
+    );
+
+    // Create notification for the canteen manager who created the menu
+    const notificationTitle = approved ? 'Menu Approuvé' : 'Menu Rejeté';
+    const notificationMessage = approved 
+      ? `Votre menu pour le ${menu.date} (${menu.meal_type}) a été approuvé.`
+      : `Votre menu pour le ${menu.date} (${menu.meal_type}) a été rejeté. Raison: ${rejection_reason}`;
+
+    await pool.query(
+      `INSERT INTO notifications (user_id, title, message, type, related_menu_id)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        menu.created_by,
+        notificationTitle,
+        notificationMessage,
+        approved ? 'MENU_APPROVED' : 'MENU_REJECTED',
+        id
+      ]
+    );
+
+    res.status(200).json({
+      success: true,
+      message: `Menu ${approved ? 'approved' : 'rejected'} successfully.`,
+      data: result.rows[0],
+    } as ApiResponse);
+  } catch (error) {
+    console.error('Approve menu error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error processing menu approval.',
     } as ApiResponse);
   }
 };

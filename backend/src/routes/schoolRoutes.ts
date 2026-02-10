@@ -15,11 +15,11 @@ const router = Router();
 // All routes require authentication
 router.use(authMiddleware);
 
-// Get all schools (accessible to all authenticated users)
-router.get('/', getAllSchools);
+// Get all schools (SUPER_ADMIN, SCHOOL_ADMIN)
+router.get('/', requireRole(UserRole.SUPER_ADMIN, UserRole.SCHOOL_ADMIN), getAllSchools);
 
-// Get school by ID
-router.get('/:id', getSchoolById);
+// Get school by ID (SUPER_ADMIN, SCHOOL_ADMIN)
+router.get('/:id', requireRole(UserRole.SUPER_ADMIN, UserRole.SCHOOL_ADMIN), getSchoolById);
 
 // Create school (only SUPER_ADMIN)
 router.post('/', requireRole(UserRole.SUPER_ADMIN), createSchool);

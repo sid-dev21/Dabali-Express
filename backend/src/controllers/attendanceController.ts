@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import pool from '../config/database';
-import { ApiResponse, MarkAttendanceDTO } from '../types';
+import { ApiResponse, MarkAttendanceDTO, NotificationType } from '../types';
 
 /**
  * ATTENDANCE CONTROLLER
@@ -126,6 +126,41 @@ export const markAttendance = async (req: Request, res: Response): Promise<void>
          VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
          RETURNING *`,
         [student_id, menu_id, date, present, finalJustified, finalReason]
+      );
+    }
+
+    // Get student and menu information for notification
+    const studentInfo = await pool.query(
+      'SELECT s.*, u.email as parent_email, u.first_name as parent_first_name, u.last_name as parent_last_name FROM students s JOIN users u ON s.parent_id = u.id WHERE s.id = $1',
+      [student_id]
+    );
+
+    const menuInfo = await pool.query(
+      'SELECT * FROM menus WHERE id = $1',
+      [menu_id]
+    );
+
+    if (studentInfo.rows.length > 0 && menuInfo.rows.length > 0) {
+      const student = studentInfo.rows[0];
+      const menu = menuInfo.rows[0];
+      
+      // Create notification for parent
+      const notificationTitle = present ? 'Repas Pris' : 'Repas Manqué';
+      const notificationMessage = present 
+        ? `${student.first_name} ${student.last_name} a pris son repas (${menu.meal_type}) aujourd'hui. Menu: ${menu.description || 'Non spécifié'}`
+        : `${student.first_name} ${student.last_name} n'a pas pris son repas (${menu.meal_type}) aujourd'hui.${finalJustified && finalReason ? ` Motif: ${finalReason}` : ''}`;
+
+      await pool.query(
+        `INSERT INTO notifications (user_id, title, message, type, related_student_id, related_menu_id)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          student.parent_id,
+          notificationTitle,
+          notificationMessage,
+          present ? NotificationType.MEAL_TAKEN : NotificationType.MEAL_MISSED,
+          student_id,
+          menu_id
+        ]
       );
     }
 
