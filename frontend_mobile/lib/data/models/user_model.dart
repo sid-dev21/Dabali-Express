@@ -18,7 +18,7 @@ class UserModel {
   // Créer depuis JSON (réponse API backend)
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
-      id: json['id'],
+      id: (json['id'] ?? json['_id'] ?? '').toString(),
       email: json['email'],
       role: json['role'],
       firstName: json['first_name'],

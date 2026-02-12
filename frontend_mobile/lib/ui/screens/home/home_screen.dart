@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../../providers/auth_provider.dart';
-import '../../../providers/child_provider.dart';
-import '../../../providers/subscription_provider.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../providers/student_provider.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../widgets/empty_children_widget.dart';
-import '../children/children_screen.dart';
-import '../menus/menus_screen.dart';
+import '../auth/login_screen.dart';
+import '../students/list_students.dart';
+import '../students/add_student_screen.dart';
+import '../menus/menu_week_screen.dart';
+import '../subscriptions/subscriptions_screens.dart';
+import '../payments/payments_history_screen.dart';
+import '../profile/profil_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -17,997 +18,252 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
-  late AnimationController _fadeController;
-  late AnimationController _slideController;
-  bool _isLoading = true;
-
+class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _fadeController = AnimationController(
-      duration: const Duration(milliseconds: 600),
-      vsync: this,
-    );
-    _slideController = AnimationController(
-      duration: const Duration(milliseconds: 800),
-      vsync: this,
-    );
-    
-    _loadData();
-  }
-
-  @override
-  void dispose() {
-    _fadeController.dispose();
-    _slideController.dispose();
-    super.dispose();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadData();
+    });
   }
 
   Future<void> _loadData() async {
-    if (!mounted) return;
-    
-    try {
-      // Charger les données des enfants et abonnements
-      await Future.wait([
-        context.read<ChildProvider>().fetchChildren(),
-        context.read<SubscriptionProvider>().fetchSubscriptions(),
-      ]);
-    } catch (e) {
-      // Gérer l'erreur silencieusement pour l'instant
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-        _fadeController.forward();
-        _slideController.forward();
-      }
-    }
-  }
+    final authProvider = context.read<AuthProvider>();
+    final studentProvider = context.read<StudentProvider>();
 
-  Future<void> _refreshData() async {
-    setState(() {
-      _isLoading = true;
-    });
-    await _loadData();
+    if (authProvider.currentUser != null) {
+      await studentProvider.loadStudents(authProvider.currentUser!.id);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
-    final childProvider = context.watch<ChildProvider>();
-    final subscriptionProvider = context.watch<SubscriptionProvider>();
-    
+    final studentProvider = context.watch<StudentProvider>();
     final user = authProvider.currentUser;
-    final children = childProvider.children;
-    final subscriptions = subscriptionProvider.subscriptions;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        title: const Text('Accueil'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.notifications_outlined),
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Notifications à venir prochainement'),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+      drawer: _buildDrawer(context, authProvider),
       body: RefreshIndicator(
-        onRefresh: _refreshData,
-        color: AppColors.primary,
-        child: _isLoading
-            ? _buildLoadingState()
-            : CustomScrollView(
-                slivers: [
-                  // Header moderne avec animation
-                  SliverToBoxAdapter(
-                    child: FadeTransition(
-                      opacity: _fadeController,
-                      child: SlideTransition(
-                        position: Tween<Offset>(
-                          begin: const Offset(0, -0.3),
-                          end: Offset.zero,
-                        ).animate(CurvedAnimation(
-                          parent: _slideController,
-                          curve: Curves.easeOutCubic,
-                        )),
-                        child: _buildModernHeader(
-                          userName: user?.fullName ?? 'Parent',
-                          activeChildren: children.where((c) => c.isApproved).length,
-                          pendingPayments: subscriptions.where((s) => s.isPendingPayment).length,
-                        ),
-                      ),
-                    ),
-                  ),
-                  
-                  const SliverToBoxAdapter(child: SizedBox(height: 32)),
-                  
-                  // Section Mes Enfants avec design moderne
-                  if (children.isEmpty) ...[
-                    SliverToBoxAdapter(
-                      child: FadeTransition(
-                        opacity: _fadeController,
-                        child: _buildModernSectionHeader(
-                          'Mes enfants',
-                          null,
-                          null,
-                        ),
-                      ),
-                    ),
-                    SliverToBoxAdapter(
-                      child: FadeTransition(
-                        opacity: _fadeController,
-                        child: const EmptyChildrenWidget(),
-                      ),
-                    ),
-                    const SliverToBoxAdapter(child: SizedBox(height: 32)),
-                  ] else ...[
-                    SliverToBoxAdapter(
-                      child: FadeTransition(
-                        opacity: _fadeController,
-                        child: _buildModernSectionHeader(
-                          'Mes enfants',
-                          'Voir tout',
-                          () => Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const ChildrenScreen()),
-                          ),
-                        ),
-                      ),
-                    ),
-                    SliverToBoxAdapter(
-                      child: FadeTransition(
-                        opacity: _fadeController,
-                        child: _buildModernChildrenList(children, subscriptions),
-                      ),
-                    ),
-                    const SliverToBoxAdapter(child: SizedBox(height: 32)),
-                  ],
-                  
-                  // Section Menu du Jour
-                  SliverToBoxAdapter(
-                    child: FadeTransition(
-                      opacity: _fadeController,
-                      child: _buildModernSectionHeader(
-                        'Menu du jour',
-                        'Voir la semaine',
-                        () => Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const MenusScreen()),
-                        ),
-                      ),
-                    ),
-                  ),
-                  SliverToBoxAdapter(
-                    child: FadeTransition(
-                      opacity: _fadeController,
-                      child: _buildModernMenuCard(),
-                    ),
-                  ),
-                  const SliverToBoxAdapter(child: SizedBox(height: 32)),
-                  
-                  // Section Actions Rapides
-                  SliverToBoxAdapter(
-                    child: FadeTransition(
-                      opacity: _fadeController,
-                      child: _buildModernSectionHeader('Actions rapides', null, null),
-                    ),
-                  ),
-                  SliverToBoxAdapter(
-                    child: FadeTransition(
-                      opacity: _fadeController,
-                      child: _buildModernQuickActions(),
-                    ),
-                  ),
-                  const SliverToBoxAdapter(child: SizedBox(height: 32)),
-                  
-                  // Section Statistiques
-                  if (children.isNotEmpty) ...[
-                    SliverToBoxAdapter(
-                      child: FadeTransition(
-                        opacity: _fadeController,
-                        child: _buildModernSectionHeader('Statistiques du mois', null, null),
-                      ),
-                    ),
-                    SliverToBoxAdapter(
-                      child: FadeTransition(
-                        opacity: _fadeController,
-                        child: _buildModernStats(),
-                      ),
-                    ),
-                    const SliverToBoxAdapter(child: SizedBox(height: 120)),
-                  ] else ...[
-                    const SliverToBoxAdapter(child: SizedBox(height: 120)),
-                  ],
-                ],
-              ),
-      ),
-      bottomNavigationBar: _buildModernBottomNav(),
-    );
-  }
-
-  Widget _buildLoadingState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 60,
-            height: 60,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: CircularProgressIndicator(
-              color: AppColors.primary,
-              strokeWidth: 3,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Chargement...',
-            style: GoogleFonts.inter(
-              color: AppColors.textSecondary,
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Header moderne avec design épuré
-  Widget _buildModernHeader({
-    required String userName,
-    required int activeChildren,
-    required int pendingPayments,
-  }) {
-    return Container(
-      margin: const EdgeInsets.all(20),
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: AppColors.primaryGradient,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withOpacity(0.2),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Bonjour, ${userName.split(' ')[0]} 👋',
-                      style: GoogleFonts.poppins(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _getGreetingMessage(),
-                      style: GoogleFonts.inter(
-                        fontSize: 16,
-                        color: Colors.white.withOpacity(0.9),
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Stack(
-                  children: [
-                    Center(
-                      child: Icon(
-                        Icons.notifications_outlined,
-                        color: Colors.white,
-                        size: 28,
-                      ),
-                    ),
-                    if (pendingPayments > 0)
-                      Positioned(
-                        right: 8,
-                        top: 8,
-                        child: Container(
-                          width: 12,
-                          height: 12,
-                          decoration: const BoxDecoration(
-                            color: Colors.red,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              Expanded(
-                child: _buildModernStatCard(
-                  'Enfants actifs',
-                  activeChildren.toString(),
-                  Icons.child_care,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildModernStatCard(
-                  'Paiements en attente',
-                  pendingPayments.toString(),
-                  Icons.payment,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildModernStatCard(String label, String value, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.2),
-          width: 1,
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              icon,
-              color: Colors.white,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Column(
+        onRefresh: _loadData,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Bienvenue
               Text(
-                value,
+                'Bonjour, ${user?.firstName ?? 'Parent'} ! 👋',
                 style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
+              const SizedBox(height: 8),
               Text(
-                label,
+                'Gérez facilement les repas scolaires de vos enfants',
                 style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.white.withOpacity(0.8),
-                  fontWeight: FontWeight.w400,
+                  fontSize: 14,
+                  color: Colors.grey[600],
                 ),
               ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+              const SizedBox(height: 24),
 
-  String _getGreetingMessage() {
-    final hour = DateTime.now().hour;
-    if (hour >= 6 && hour < 12) {
-      return "Bonne journée!";
-    } else if (hour >= 12 && hour < 14) {
-      return "Bon appétit 😊";
-    } else if (hour >= 14 && hour < 18) {
-      return "Bonne après-midi!";
-    } else {
-      return "Bonne soirée!";
-    }
-  }
-
-  // Section header moderne
-  Widget _buildModernSectionHeader(String title, String? actionText, VoidCallback? onTap) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          if (actionText != null && onTap != null)
-            GestureDetector(
-              onTap: onTap,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      actionText,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      Icons.arrow_forward_ios,
-                      size: 12,
+              // Statistiques rapides
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildStatCard(
+                      icon: Icons.child_care,
+                      label: 'Enfants',
+                      value: '${studentProvider.students.length}',
                       color: AppColors.primary,
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildStatCard(
+                      icon: Icons.card_membership,
+                      label: 'Actifs',
+                      value: '${studentProvider.students.where((s) => s.hasActiveSubscription).length}',
+                      color: AppColors.success,
+                    ),
+                  ),
+                ],
               ),
-            ),
-        ],
-      ),
-    );
-  }
+              const SizedBox(height: 24),
 
-  // Liste des enfants moderne
-  Widget _buildModernChildrenList(children, subscriptions) {
-    return SizedBox(
-      height: 240,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.only(left: 20, right: 20),
-        itemCount: children.length,
-        itemBuilder: (context, index) {
-          final child = children[index];
-          final subscription = subscriptions
-              .where((s) => s.childId == child.id)
-              .firstOrNull;
-          
-          return Container(
-            width: 200,
-            margin: const EdgeInsets.only(right: 16),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 16,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Column(
-              children: [
-                // Header avec dégradé moderne
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        AppColors.primary,
-                        AppColors.primary.withOpacity(0.8),
+              if (studentProvider.students.isEmpty) ...[
+                Card(
+                  color: AppColors.warning.withOpacity(0.08),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Aucun enfant enregistré',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Ajoutez un enfant pour accéder aux menus, abonnements et paiements.',
+                          style: TextStyle(color: Colors.grey[700]),
+                        ),
+                        const SizedBox(height: 12),
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const AddStudentScreen(),
+                              ),
+                            ).then((_) => _loadData());
+                          },
+                          icon: const Icon(Icons.add),
+                          label: const Text('Ajouter un enfant'),
+                        ),
                       ],
                     ),
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(20),
-                      topRight: Radius.circular(20),
-                    ),
-                  ),
-                  child: Column(
-                    children: [
-                      Container(
-                        width: 60,
-                        height: 60,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: const Icon(
-                          Icons.child_care,
-                          color: Colors.white,
-                          size: 32,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        child.fullName,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                        textAlign: TextAlign.center,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        child.className,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.white.withOpacity(0.9),
-                        ),
-                      ),
-                    ],
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      _buildSubscriptionBadge(subscription),
-                      const SizedBox(height: 12),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          _buildQuickStat(Icons.restaurant_menu, 'Repas', '12'),
-                          _buildQuickStat(Icons.calendar_today, 'Présence', '95%'),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
+                const SizedBox(height: 24),
               ],
-            ),
-          );
-        },
-      ),
-    );
-  }
 
-  Widget _buildSubscriptionBadge(subscription) {
-    Color backgroundColor;
-    Color textColor;
-    String text;
-    IconData icon;
-
-    if (subscription == null) {
-      backgroundColor = AppColors.primary.withOpacity(0.1);
-      textColor = AppColors.primary;
-      text = 'Aucun abonnement';
-      icon = Icons.warning_amber_outlined;
-    } else if (subscription.isActive) {
-      backgroundColor = AppColors.primary.withOpacity(0.1);
-      textColor = AppColors.primary;
-      text = 'Abonnement actif';
-      icon = Icons.check_circle;
-    } else if (subscription.isExpired) {
-      backgroundColor = AppColors.primary.withOpacity(0.1);
-      textColor = AppColors.primary;
-      text = 'Abonnement expiré';
-      icon = Icons.cancel;
-    } else {
-      backgroundColor = AppColors.primary.withOpacity(0.1);
-      textColor = AppColors.primary;
-      text = 'En attente';
-      icon = Icons.pending;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: textColor),
-          const SizedBox(width: 6),
-          Text(
-            text,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: textColor,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildQuickStat(IconData icon, String label, String value) {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: AppColors.background,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(icon, size: 16, color: AppColors.textSecondary),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 10,
-            color: AppColors.textSecondary,
-            fontWeight: FontWeight.w400,
-          ),
-        ),
-      ],
-    );
-  }
-
-  // Menu card moderne
-  Widget _buildModernMenuCard() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  Icons.restaurant_menu,
-                  color: AppColors.primary,
-                  size: 24,
+              // Actions rapides
+              const Text(
+                'Actions rapides',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Menu du jour',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
-                      ),
+              const SizedBox(height: 12),
+
+              _buildQuickActionCard(
+                context,
+                icon: Icons.child_care,
+                title: 'Mes Enfants',
+                subtitle: 'Voir et gérer vos enfants',
+                color: AppColors.primary,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const StudentsListScreen(),
                     ),
-                    Text(
-                      _formatDate(DateTime.now()),
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: AppColors.textSecondary,
-                      ),
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
+
+              _buildQuickActionCard(
+                context,
+                icon: Icons.restaurant_menu,
+                title: 'Menus',
+                subtitle: 'Menus de la semaine',
+                color: AppColors.secondary,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const MenuWeekScreen(),
                     ),
-                  ],
-                ),
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
+
+              _buildQuickActionCard(
+                context,
+                icon: Icons.card_membership,
+                title: 'Abonnements',
+                subtitle: 'Gérer les abonnements',
+                color: AppColors.info,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const SubscriptionsScreen(),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
+
+              _buildQuickActionCard(
+                context,
+                icon: Icons.payment,
+                title: 'Paiements',
+                subtitle: 'Historique et nouveaux paiements',
+                color: AppColors.success,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const PaymentHistoryScreen(),
+                    ),
+                  );
+                },
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.background,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Riz au gras avec sauce arachide',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 4,
-                  children: [
-                    'Salade verte',
-                    'Banane plantain frite',
-                    'Légumes vapeur',
-                    'Fruit local',
-                    'Yaourt nature'
-                  ].map((item) => Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      item,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  )).toList(),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Actions rapides modernes
-  Widget _buildModernQuickActions() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
-        children: [
-          Expanded(
-            child: _buildModernActionButton(
-              Icons.payment,
-              'Payer',
-              AppColors.primary,
-              () => _handlePayment(),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _buildModernActionButton(
-              Icons.restaurant_menu,
-              'Menus',
-              AppColors.primary,
-              () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const MenusScreen()),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _buildModernActionButton(
-              Icons.notifications,
-              'Notifications',
-              AppColors.primary,
-              () => _handleNotifications(),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildModernActionButton(IconData icon, String label, Color color, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 16,
-              offset: const Offset(0, 4),
-            ),
-          ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildStatCard({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Icon(
-                icon,
-                color: color,
-                size: 28,
-              ),
-            ),
-            const SizedBox(height: 12),
+            Icon(icon, color: color, size: 32),
+            const SizedBox(height: 8),
             Text(
-              label,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // Statistiques modernes
-  Widget _buildModernStats() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
-        children: [
-          Expanded(
-            child: _buildModernStatItem('Repas pris', '45', AppColors.primary),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _buildModernStatItem('Présence', '92%', AppColors.primary),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _buildModernStatItem('Coût', '12 500', AppColors.primary),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildModernStatItem(String label, String value, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
               value,
               style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
                 color: color,
               ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              color: AppColors.textSecondary,
-              fontWeight: FontWeight.w500,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Bottom navigation moderne
-  Widget _buildModernBottomNav() {
-    return Container(
-      height: 80,
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 20,
-            offset: const Offset(0, -4),
-          ),
-        ],
-      ),
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildModernNavItem(Icons.home, 'Accueil', true),
-              _buildModernNavItem(Icons.child_care, 'Enfants', false, onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ChildrenScreen()),
-                );
-              }),
-              _buildModernNavItem(Icons.restaurant_menu, 'Menus', false, onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const MenusScreen()),
-                );
-              }),
-              _buildModernNavItem(Icons.person, 'Profil', false, onTap: () {
-                // TODO: Naviguer vers l'écran de profil
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Text('Profil - Bientôt disponible'),
-                    backgroundColor: AppColors.primary,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                );
-              }),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildModernNavItem(IconData icon, String label, bool isActive, {VoidCallback? onTap}) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isActive ? AppColors.primary.withOpacity(0.1) : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 24,
-              color: isActive ? AppColors.primary : AppColors.textSecondary,
             ),
             const SizedBox(height: 4),
             Text(
               label,
               style: TextStyle(
-                fontSize: 11,
-                color: isActive ? AppColors.primary : AppColors.textSecondary,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                fontSize: 12,
+                color: Colors.grey[600],
               ),
             ),
           ],
@@ -1016,35 +272,110 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  String _formatDate(DateTime date) {
-    const days = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
-    const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
-    
-    return '${days[date.weekday - 1]} ${date.day} ${months[date.month - 1]}';
-  }
-
-  void _handlePayment() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Redirection vers les paiements...'),
-        backgroundColor: AppColors.primary,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+  Widget _buildQuickActionCard(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: color, size: 28),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: Colors.grey),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  void _handleNotifications() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Aucune nouvelle notification'),
-        backgroundColor: AppColors.primary,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+  Widget _buildDrawer(BuildContext context, AuthProvider authProvider) {
+    return Drawer(
+      child: ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          UserAccountsDrawerHeader(
+            decoration: const BoxDecoration(color: AppColors.primary),
+            accountName: Text(authProvider.currentUser?.fullName ?? ''),
+            accountEmail: Text(authProvider.currentUser?.email ?? ''),
+            currentAccountPicture: const CircleAvatar(
+              backgroundColor: Colors.white,
+              child: Icon(Icons.person, size: 40, color: AppColors.primary),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.home),
+            title: const Text('Accueil'),
+            onTap: () => Navigator.pop(context),
+          ),
+          ListTile(
+            leading: const Icon(Icons.person),
+            title: const Text('Mon Profil'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ProfileScreen()),
+              );
+            },
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.logout, color: AppColors.error),
+            title: const Text('Déconnexion'),
+            onTap: () async {
+              await authProvider.logout();
+              if (context.mounted) {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  (route) => false,
+                );
+              }
+            },
+          ),
+        ],
       ),
     );
   }

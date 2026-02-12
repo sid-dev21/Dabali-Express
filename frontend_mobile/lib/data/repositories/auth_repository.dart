@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import '../services/api_service.dart';
 import '../services/storage_service.dart';
 import '../models/user_model.dart';
@@ -18,8 +19,6 @@ class AuthRepository {
         },
       );
 
-      print('DEBUG: Response data: ${response.data}'); // Debug temporaire
-
       if (response.data['success'] == true) {
         // Sauvegarder le token
         final token = response.data['token'];
@@ -27,13 +26,13 @@ class AuthRepository {
 
         // Sauvegarder les infos utilisateur
         final userData = response.data['data'];
-        print('DEBUG: User data: $userData'); // Debug temporaire
-        await _storageService.saveUserId(userData['id']); // Garder comme String
+        await _storageService.saveUserId(
+          (userData['id'] ?? userData['_id'] ?? '').toString(),
+        );
         await _storageService.saveUserEmail(userData['email']);
 
         // Retourner l'utilisateur
         final user = UserModel.fromJson(userData);
-        print('DEBUG: User model created: ${user.email}'); // Debug temporaire
         return {
           'success': true,
           'user': user,
@@ -46,10 +45,9 @@ class AuthRepository {
         'message': response.data['message'] ?? 'Erreur de connexion',
       };
     } catch (e) {
-      print('DEBUG: Exception in login: $e'); // Debug temporaire
       return {
         'success': false,
-        'message': 'Erreur de connexion au serveur',
+        'message': _extractErrorMessage(e, 'Erreur de connexion au serveur'),
       };
     }
   }
@@ -68,7 +66,7 @@ class AuthRepository {
   // ===== GET CURRENT USER =====
   Future<UserModel?> getCurrentUser() async {
     try {
-      final response = await _apiService.get(ApiConstants.profile);
+      final response = await _apiService.get(ApiConstants.me);
 
       if (response.data['success'] == true) {
         return UserModel.fromJson(response.data['data']);
@@ -107,7 +105,9 @@ class AuthRepository {
 
         // Sauvegarder les infos utilisateur
         final userData = response.data['data'];
-        await _storageService.saveUserId(userData['id']); // Garder comme String
+        await _storageService.saveUserId(
+          (userData['id'] ?? userData['_id'] ?? '').toString(),
+        );
         await _storageService.saveUserEmail(userData['email']);
 
         final user = UserModel.fromJson(userData);
@@ -125,8 +125,19 @@ class AuthRepository {
     } catch (e) {
       return {
         'success': false,
-        'message': 'Erreur de connexion au serveur',
+        'message': _extractErrorMessage(e, 'Erreur de connexion au serveur'),
       };
     }
+  }
+
+  String _extractErrorMessage(Object error, String fallback) {
+    if (error is DioException) {
+      final data = error.response?.data;
+      if (data is Map && data['message'] != null) {
+        return data['message'].toString();
+      }
+      return error.message ?? fallback;
+    }
+    return fallback;
   }
 }

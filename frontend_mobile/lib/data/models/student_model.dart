@@ -1,10 +1,10 @@
 class StudentModel {
-  final int id;
+  final String id;
   final String firstName;
   final String lastName;
   final String? className;
-  final int schoolId;
-  final int parentId;
+  final String schoolId;
+  final String parentId;
   final String? photoUrl;
   final SchoolInfo? school;
   final SubscriptionInfo? activeSubscription;
@@ -22,21 +22,32 @@ class StudentModel {
   });
 
   factory StudentModel.fromJson(Map<String, dynamic> json) {
+    final schoolValue = json['school_id'];
+    final schoolPayload = json['school'] is Map<String, dynamic>
+        ? json['school'] as Map<String, dynamic>
+        : (schoolValue is Map<String, dynamic> ? schoolValue : null);
+    final parentValue = json['parent_id'];
     return StudentModel(
-      id: json['id'],
+      id: _stringId(json['id'] ?? json['_id']),
       firstName: json['first_name'],
       lastName: json['last_name'],
       className: json['class_name'],
-      schoolId: json['school_id'],
-      parentId: json['parent_id'],
+      schoolId: _stringId(schoolValue),
+      parentId: _stringId(parentValue),
       photoUrl: json['photo_url'],
-      school: json['school'] != null 
-          ? SchoolInfo.fromJson(json['school']) 
-          : null,
+      school: schoolPayload != null ? SchoolInfo.fromJson(schoolPayload) : null,
       activeSubscription: json['active_subscription'] != null
           ? SubscriptionInfo.fromJson(json['active_subscription'])
           : null,
     );
+  }
+
+  static String _stringId(dynamic raw) {
+    if (raw == null) return '';
+    if (raw is Map<String, dynamic>) {
+      return (raw['_id'] ?? raw['id'] ?? '').toString();
+    }
+    return raw.toString();
   }
 
   String get fullName => '$firstName $lastName';
@@ -45,22 +56,22 @@ class StudentModel {
 
 // Info école (nested dans Student)
 class SchoolInfo {
-  final int id;
+  final String id;
   final String name;
 
   SchoolInfo({required this.id, required this.name});
 
   factory SchoolInfo.fromJson(Map<String, dynamic> json) {
     return SchoolInfo(
-      id: json['id'],
-      name: json['name'],
+      id: (json['id'] ?? json['_id'] ?? '').toString(),
+      name: (json['name'] ?? '').toString(),
     );
   }
 }
 
 // Info abonnement (nested dans Student)
 class SubscriptionInfo {
-  final int id;
+  final String id;
   final String type;
   final String status;
   final String endDate;
@@ -74,19 +85,18 @@ class SubscriptionInfo {
 
   factory SubscriptionInfo.fromJson(Map<String, dynamic> json) {
     return SubscriptionInfo(
-      id: json['id'],
-      type: json['type'],
+      id: (json['id'] ?? json['_id'] ?? '').toString(),
+      type: (json['type'] ?? json['meal_plan'] ?? 'STANDARD').toString(),
       status: json['status'],
-      endDate: json['end_date'],
+      endDate: (json['end_date'] ?? '').toString(),
     );
   }
 
   String get typeLabel {
     switch (type) {
-      case 'DAILY': return 'Journalier';
-      case 'WEEKLY': return 'Hebdomadaire';
-      case 'MONTHLY': return 'Mensuel';
-      case 'TRIMESTER': return 'Trimestriel';
+      case 'STANDARD': return 'Standard';
+      case 'PREMIUM': return 'Premium';
+      case 'VEGETARIAN': return 'Végétarien';
       default: return type;
     }
   }
@@ -95,7 +105,7 @@ class SubscriptionInfo {
     switch (status) {
       case 'ACTIVE': return 'Actif';
       case 'EXPIRED': return 'Expiré';
-      case 'SUSPENDED': return 'Suspendu';
+      case 'CANCELLED': return 'Annulé';
       default: return status;
     }
   }

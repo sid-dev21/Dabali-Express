@@ -1,296 +1,294 @@
 import 'package:flutter/material.dart';
-import '../../../core/theme/app_theme.dart';
+import 'package:provider/provider.dart';
+import '../../../providers/student_provider.dart';
+import '../../../providers/subscription_provider.dart';
+import '../../../providers/payment_provider.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../widgets/custom_button.dart';
 
 class PaymentScreen extends StatefulWidget {
-  final String subscriptionId;
-  final VoidCallback? onPressed;
-  final double amount;
-  final String childId;
-
-  const PaymentScreen({
-    super.key,
-    required this.subscriptionId,
-    this.onPressed,
-    required this.amount,
-    required this.childId,
-  });
+  const PaymentScreen({super.key});
 
   @override
   State<PaymentScreen> createState() => _PaymentScreenState();
 }
 
 class _PaymentScreenState extends State<PaymentScreen> {
-  String? _selectedMethod;
-  bool _isLoading = false;
-
-  final Map<String, dynamic> _paymentMethods = {
-    'ORANGE_MONEY': {
-      'name': 'Orange Money',
-      'icon': Icons.phone_android,
-      'color': AppColors.orangeMoney,
-    },
-    'MOOV_MONEY': {
-      'name': 'Moov Money',
-      'icon': Icons.phone_iphone,
-      'color': AppColors.moovMoney,
-    },
-    'WAVE': {
-      'name': 'Wave',
-      'icon': Icons.account_balance_wallet,
-      'color': AppColors.info,
-    },
-    'CASH': {
-      'name': 'Espèces',
-      'icon': Icons.money,
-      'color': AppColors.success,
-    },
-  };
+  final _formKey = GlobalKey<FormState>();
+  final _phoneController = TextEditingController();
+  
+  String? selectedStudentId;
+  String? selectedSubscriptionId;
+  String selectedMethod = 'ORANGE_MONEY';
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Paiement'),
-        backgroundColor: AppColors.surface,
-        elevation: 0,
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(AppTheme.lg),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: AppTheme.md),
-              
-              // Montant à payer
-              Container(
-                padding: const EdgeInsets.all(AppTheme.lg),
-                decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-                ),
-                child: Column(
-                  children: [
-                    Text(
-                      'Montant à payer',
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: AppTheme.sm),
-                    Text(
-                      '${widget.amount.toStringAsFixed(0)} FCFA',
-                      style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: AppTheme.xl),
-              
-              // Méthodes de paiement
-              Text(
-                'Choisissez une méthode de paiement',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              
-              const SizedBox(height: AppTheme.lg),
-              
-              ..._paymentMethods.entries.map((entry) {
-                final method = entry.key;
-                final details = entry.value;
-                final isSelected = _selectedMethod == method;
-                
-                return Container(
-                  margin: const EdgeInsets.only(bottom: AppTheme.md),
-                  child: InkWell(
-                    onTap: () {
-                      setState(() {
-                        _selectedMethod = method;
-                      });
-                    },
-                    borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-                    child: Container(
-                      padding: const EdgeInsets.all(AppTheme.lg),
-                      decoration: BoxDecoration(
-                        color: isSelected ? details['color'] : AppColors.surface,
-                        borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-                        border: Border.all(
-                          color: isSelected ? details['color'] : AppColors.textTertiary.withOpacity(0.3),
-                          width: isSelected ? 2 : 1,
-                        ),
-                        boxShadow: isSelected ? AppColors.buttonShadow : AppColors.cardShadow,
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 50,
-                            height: 50,
-                            decoration: BoxDecoration(
-                              color: isSelected ? Colors.white.withOpacity(0.2) : details['color']?.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-                            ),
-                            child: Icon(
-                              details['icon'],
-                              color: isSelected ? Colors.white : details['color'],
-                              size: 24,
-                            ),
-                          ),
-                          const SizedBox(width: AppTheme.md),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  details['name'],
-                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    color: isSelected ? Colors.white : AppColors.textPrimary,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const SizedBox(height: AppTheme.xs),
-                                Text(
-                                  _getPaymentDescription(method),
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: isSelected ? Colors.white.withOpacity(0.8) : AppColors.textSecondary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          if (isSelected) ...[
-                            Icon(
-                              Icons.check_circle,
-                              color: Colors.white,
-                              size: 24,
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-              
-              const SizedBox(height: AppTheme.xl),
-              
-              // Instructions
-              if (_selectedMethod != null) ...[
-                Container(
-                  padding: const EdgeInsets.all(AppTheme.lg),
-                  decoration: BoxDecoration(
-                    color: AppColors.info.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-                    border: Border.all(color: AppColors.info.withOpacity(0.3)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.info_outline,
-                            color: AppColors.info,
-                            size: 20,
-                          ),
-                          const SizedBox(width: AppTheme.sm),
-                          Text(
-                            'Instructions',
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              color: AppColors.info,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: AppTheme.md),
-                      Text(
-                        _getPaymentInstructions(_selectedMethod!),
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                
-                const SizedBox(height: AppTheme.xl),
-              ],
-              
-              // Bouton de paiement
-              CustomButton(
-                text: _selectedMethod != null ? 'Confirmer le paiement' : 'Sélectionnez une méthode',
-                onPressed: _selectedMethod != null ? () => _handlePayment() : null,
-                isLoading: _isLoading,
-                fullWidth: true,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initStudent();
+    });
   }
 
-  String _getPaymentDescription(String method) {
-    switch (method) {
-      case 'ORANGE_MONEY':
-        return 'Paiement via Orange Money';
-      case 'MOOV_MONEY':
-        return 'Paiement via Moov Money';
-      case 'WAVE':
-        return 'Paiement via Wave';
-      case 'CASH':
-        return 'Paiement en espèces à l\'école';
-      default:
-        return 'Méthode de paiement';
+  @override
+  void dispose() {
+    _phoneController.dispose();
+    super.dispose();
+  }
+
+  void _initStudent() {
+    final studentProvider = context.read<StudentProvider>();
+    if (studentProvider.students.isNotEmpty) {
+      selectedStudentId = studentProvider.students.first.id;
+      _loadSubscriptions();
     }
   }
 
-  String _getPaymentInstructions(String method) {
-    switch (method) {
-      case 'ORANGE_MONEY':
-        return '1. Composez *144#* et envoyez à 12345\n2. Entrez le code reçu pour valider\n3. Gardez votre code de transaction';
-      case 'MOOV_MONEY':
-        return '1. Composez *155#* et envoyez à 12345\n2. Entrez le code reçu pour valider\n3. Gardez votre code de transaction';
-      case 'WAVE':
-        return '1. Scannez le code QR avec l\'application Wave\n2. Confirmez le paiement dans l\'application\n3. Le paiement sera validé instantanément';
-      case 'CASH':
-        return '1. Rendez-vous à l\'administration de l\'école\n2. Présentez ce code de paiement\n3. Payez le montant en espèces\n4. Recevez une confirmation immédiate';
-      default:
-        return 'Instructions de paiement';
+  Future<void> _loadSubscriptions() async {
+    if (selectedStudentId == null) return;
+    final subscriptionProvider = context.read<SubscriptionProvider>();
+    await subscriptionProvider.loadSubscriptions(selectedStudentId!);
+    
+    // Sélectionner l'abonnement actif par défaut
+    final activeSub = subscriptionProvider.getActiveSubscription();
+    if (!mounted) return;
+    if (activeSub != null) {
+      setState(() {
+        selectedSubscriptionId = activeSub.id;
+      });
     }
   }
 
   Future<void> _handlePayment() async {
-    if (_selectedMethod == null) return;
-
-    setState(() => _isLoading = true);
-
-    // Simuler le traitement du paiement
-    await Future.delayed(const Duration(seconds: 3));
-
-    setState(() => _isLoading = false);
-
-    if (mounted) {
+    if (!_formKey.currentState!.validate()) return;
+    if (selectedSubscriptionId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Paiement simulé avec succès!'),
+          content: Text('Veuillez sélectionner un abonnement'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    final subscriptionProvider = context.read<SubscriptionProvider>();
+    final subscription = subscriptionProvider.subscriptions
+        .firstWhere((s) => s.id == selectedSubscriptionId);
+
+    final paymentProvider = context.read<PaymentProvider>();
+    
+    final success = await paymentProvider.createPayment(
+      subscriptionId: selectedSubscriptionId!,
+      amount: subscription.price,
+      method: selectedMethod,
+      phone: _phoneController.text.trim(),
+    );
+
+    if (!mounted) return;
+
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('✓ Paiement initié avec succès'),
           backgroundColor: AppColors.success,
         ),
       );
-      
-      // Retourner à l'écran précédent
-      Navigator.of(context).pop();
-      Navigator.of(context).pop();
+      Navigator.pop(context);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(paymentProvider.errorMessage ?? 'Erreur de paiement'),
+          backgroundColor: AppColors.error,
+        ),
+      );
     }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final studentProvider = context.watch<StudentProvider>();
+    final subscriptionProvider = context.watch<SubscriptionProvider>();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Nouveau Paiement'),
+      ),
+      body: studentProvider.students.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.info_outline, size: 60, color: Colors.grey[400]),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Ajoutez d\'abord un enfant\navec un abonnement',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                  ),
+                ],
+              ),
+            )
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Sélection de l'enfant
+                    const Text(
+                      'Sélectionner un enfant',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: selectedStudentId,
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.child_care),
+                      ),
+                      items: studentProvider.students.map((student) {
+                        return DropdownMenuItem(
+                          value: student.id,
+                          child: Text(student.fullName),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          selectedStudentId = value;
+                          selectedSubscriptionId = null;
+                        });
+                        _loadSubscriptions();
+                      },
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Sélection de l'abonnement
+                    if (subscriptionProvider.subscriptions.isNotEmpty) ...[
+                      const Text(
+                        'Abonnement à payer',
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        value: selectedSubscriptionId,
+                        decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.card_membership),
+                        ),
+                        items:
+                            subscriptionProvider.subscriptions.map((sub) {
+                          return DropdownMenuItem(
+                            value: sub.id,
+                            child: Text(
+                                '${sub.typeLabel} - ${sub.formattedAmount}'),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() {
+                            selectedSubscriptionId = value;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 24),
+                    ],
+
+                    // Méthode de paiement
+                    const Text(
+                      'Méthode de paiement',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 12),
+                    Card(
+                      child: RadioListTile<String>(
+                        value: 'ORANGE_MONEY',
+                        groupValue: selectedMethod,
+                        onChanged: (value) {
+                          setState(() {
+                            selectedMethod = value!;
+                          });
+                        },
+                        title: const Text('Orange Money'),
+                        secondary: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.orangeMoney.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.phone_android,
+                              color: AppColors.orangeMoney),
+                        ),
+                      ),
+                    ),
+                    Card(
+                      child: RadioListTile<String>(
+                        value: 'MOOV_MONEY',
+                        groupValue: selectedMethod,
+                        onChanged: (value) {
+                          setState(() {
+                            selectedMethod = value!;
+                          });
+                        },
+                        title: const Text('Moov Money'),
+                        secondary: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.moovMoney.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.phone_android,
+                              color: AppColors.moovMoney),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Numéro de téléphone
+                    TextFormField(
+                      controller: _phoneController,
+                      keyboardType: TextInputType.phone,
+                      decoration: const InputDecoration(
+                        labelText: 'Numéro de téléphone',
+                        prefixIcon: Icon(Icons.phone),
+                        hintText: 'Ex: 70123456',
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Veuillez entrer votre numéro';
+                        }
+                        if (value.length < 8) {
+                          return 'Numéro invalide';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 32),
+
+                    // Bouton de paiement
+                    Consumer<PaymentProvider>(
+                      builder: (context, provider, _) {
+                        return SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: provider.isLoading ? null : _handlePayment,
+                            icon: provider.isLoading
+                                ? const SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Icon(Icons.payment),
+                            label: const Text('Payer maintenant'),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+    );
   }
 }

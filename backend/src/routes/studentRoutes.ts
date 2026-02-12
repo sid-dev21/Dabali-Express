@@ -25,8 +25,8 @@ router.get('/parent/:parentId', requireRole(UserRole.PARENT), getStudentsByParen
 // Get student by ID (SCHOOL_ADMIN, CANTEEN_MANAGER, PARENT)
 router.get('/:id', requireRole(UserRole.SCHOOL_ADMIN, UserRole.CANTEEN_MANAGER, UserRole.PARENT), getStudentById);
 
-// Create student (SCHOOL_ADMIN only)
-router.post('/', requireRole(UserRole.SCHOOL_ADMIN), createStudent);
+// Create student (SCHOOL_ADMIN, PARENT)
+router.post('/', requireRole(UserRole.SCHOOL_ADMIN, UserRole.PARENT), createStudent);
 
 // Update student (SCHOOL_ADMIN only)
 router.put('/:id', requireRole(UserRole.SCHOOL_ADMIN), updateStudent);

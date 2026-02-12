@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import Student from '../models/Student';
 import School from '../models/School';
 import User from '../models/User';
+import Subscription from '../models/Subscription';
 import { ApiResponse, CreateStudentDTO, UserRole } from '../types';
 
 // Allows to get all students with optional filters (school, parent, class) and populated school and parent info
@@ -44,9 +45,39 @@ export const getStudentsByParent = async (req: Request, res: Response): Promise<
       .populate('school_id', 'name city')
       .sort({ last_name: 1, first_name: 1 });
 
+    const studentIds = students.map((student) => student._id);
+    const activeSubscriptions = await Subscription.find({
+      student_id: { $in: studentIds },
+      status: 'ACTIVE',
+    })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const activeByStudentId = new Map<string, any>();
+    for (const sub of activeSubscriptions) {
+      const studentId = sub.student_id?.toString();
+      if (studentId && !activeByStudentId.has(studentId)) {
+        activeByStudentId.set(studentId, {
+          id: sub._id.toString(),
+          meal_plan: sub.meal_plan,
+          status: sub.status,
+          end_date: sub.end_date,
+          price: sub.price,
+        });
+      }
+    }
+
+    const hydratedStudents = students.map((student) => {
+      const raw = student.toObject();
+      return {
+        ...raw,
+        active_subscription: activeByStudentId.get(student._id.toString()) ?? null,
+      };
+    });
+
     res.json({
       success: true,
-      data: students
+      data: hydratedStudents
     } as ApiResponse);
   } catch (error) {
     console.error('Get students by parent error:', error);
@@ -91,9 +122,11 @@ export const getStudentById = async (req: Request, res: Response): Promise<void>
 export const createStudent = async (req: Request, res: Response): Promise<void> => {
   try {
     const { first_name, last_name, class_name, school_id, parent_id, allergies }: CreateStudentDTO = req.body;
+    const resolvedParentId =
+      req.user?.role === UserRole.PARENT ? req.user.id : parent_id;
 
     // Validate required fields
-    if (!first_name || !last_name || !school_id || !parent_id) {
+    if (!first_name || !last_name || !school_id || !resolvedParentId) {
       res.status(400).json({
         success: false,
         message: 'First name, last name, school ID, and parent ID are required.'
@@ -112,7 +145,7 @@ export const createStudent = async (req: Request, res: Response): Promise<void> 
     }
 
     // Check if parent exists
-    const parent = await User.findById(parent_id);
+    const parent = await User.findById(resolvedParentId);
     if (!parent) {
       res.status(404).json({
         success: false,
@@ -127,7 +160,7 @@ export const createStudent = async (req: Request, res: Response): Promise<void> 
       last_name,
       class_name,
       school_id,
-      parent_id,
+      parent_id: resolvedParentId,
       allergies: allergies || []
     });
 

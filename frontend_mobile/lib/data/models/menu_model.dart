@@ -2,211 +2,68 @@ class MenuModel {
   final String id;
   final String schoolId;
   final String date;
-  final List<MealItem> meals;
-  final String? notes;
-  final DateTime? createdAt;
-  final DateTime? updatedAt;
+  final String mealType;
+  final String? description;
+  final List<String> items;
 
   MenuModel({
     required this.id,
     required this.schoolId,
     required this.date,
-    required this.meals,
-    this.notes,
-    this.createdAt,
-    this.updatedAt,
+    required this.mealType,
+    this.description,
+    required this.items,
   });
 
   factory MenuModel.fromJson(Map<String, dynamic> json) {
-    final mealsList = <MealItem>[];
-    if (json['meals'] != null) {
-      final mealsData = json['meals'] as List;
-      mealsList.addAll(mealsData.map((meal) => MealItem.fromJson(meal)));
-    }
-
+    final schoolValue = json['school_id'];
     return MenuModel(
-      id: json['id']?.toString() ?? '',
-      schoolId: json['school_id']?.toString() ?? json['schoolId'] ?? '',
-      date: json['date'] ?? '',
-      meals: mealsList,
-      notes: json['notes']?.toString(),
-      createdAt: json['created_at'] != null 
-          ? DateTime.parse(json['created_at']) 
-          : null,
-      updatedAt: json['updated_at'] != null 
-          ? DateTime.parse(json['updated_at']) 
-          : null,
+      id: (json['id'] ?? json['_id'] ?? '').toString(),
+      schoolId: _stringId(schoolValue),
+      date: _normalizeDate((json['date'] ?? '').toString()),
+      mealType: (json['meal_type'] ?? '').toString(),
+      description: json['description'],
+      items: json['items'] != null
+          ? List<String>.from(json['items'])
+          : [],
     );
   }
 
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'school_id': schoolId,
-      'date': date,
-      'meals': meals.map((meal) => meal.toJson()).toList(),
-      'notes': notes,
-      'created_at': createdAt?.toIso8601String(),
-      'updated_at': updatedAt?.toIso8601String(),
-    };
-  }
-
-  DateTime? get parsedDate {
-    try {
-      return DateTime.parse(date);
-    } catch (e) {
-      return null;
+  static String _stringId(dynamic raw) {
+    if (raw == null) return '';
+    if (raw is Map<String, dynamic>) {
+      return (raw['_id'] ?? raw['id'] ?? '').toString();
     }
+    return raw.toString();
   }
 
-  String get formattedDate {
-    final dt = parsedDate;
-    if (dt == null) return date;
-    
-    final months = [
-      'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
-      'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'
+  static String _normalizeDate(String raw) {
+    if (raw.isEmpty) return raw;
+    return raw.length >= 10 ? raw.substring(0, 10) : raw;
+  }
+
+  // Nom du jour en français
+  String get dayName {
+    final dateTime = DateTime.parse(date);
+    const days = [
+      'Lundi', 'Mardi', 'Mercredi',
+      'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'
     ];
-    
-    return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
+    return days[dateTime.weekday - 1];
   }
 
-  MenuModel copyWith({
-    String? id,
-    String? schoolId,
-    String? date,
-    List<MealItem>? meals,
-    String? notes,
-    DateTime? createdAt,
-    DateTime? updatedAt,
-  }) {
-    return MenuModel(
-      id: id ?? this.id,
-      schoolId: schoolId ?? this.schoolId,
-      date: date ?? this.date,
-      meals: meals ?? this.meals,
-      notes: notes ?? this.notes,
-      createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
-    );
+  // Date formatée
+  String get formattedDate {
+    final dateTime = DateTime.parse(date);
+    return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
   }
 
-  @override
-  bool operator ==(Object other) {
-    if (identical(this, other)) return true;
-    return other is MenuModel && other.id == id;
-  }
-
-  @override
-  int get hashCode => id.hashCode;
-
-  @override
-  String toString() {
-    return 'MenuModel(id: $id, schoolId: $schoolId, date: $date, meals: ${meals.length})';
-  }
-}
-
-class MealItem {
-  final String id;
-  final String name;
-  final String description;
-  final String category; // ENTREE, PLAT, DESSERT, BOISSON
-  final List<String> ingredients;
-  final String? imageUrl;
-  final bool isAvailable;
-  final double? price;
-
-  MealItem({
-    required this.id,
-    required this.name,
-    required this.description,
-    required this.category,
-    required this.ingredients,
-    this.imageUrl,
-    required this.isAvailable,
-    this.price,
-  });
-
-  factory MealItem.fromJson(Map<String, dynamic> json) {
-    final ingredientsList = <String>[];
-    if (json['ingredients'] != null) {
-      final ingredientsData = json['ingredients'] as List;
-      ingredientsList.addAll(ingredientsData.map((ing) => ing.toString()));
+  String get mealTypeLabel {
+    switch (mealType) {
+      case 'BREAKFAST': return 'Petit déjeuner';
+      case 'LUNCH': return 'Déjeuner';
+      case 'DINNER': return 'Dîner';
+      default: return mealType;
     }
-
-    return MealItem(
-      id: json['id']?.toString() ?? '',
-      name: json['name'] ?? '',
-      description: json['description'] ?? '',
-      category: json['category'] ?? 'PLAT',
-      ingredients: ingredientsList,
-      imageUrl: json['image_url']?.toString() ?? json['imageUrl'],
-      isAvailable: json['is_available'] ?? json['isAvailable'] ?? true,
-      price: json['price']?.toDouble(),
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'name': name,
-      'description': description,
-      'category': category,
-      'ingredients': ingredients,
-      'image_url': imageUrl,
-      'is_available': isAvailable,
-      'price': price,
-    };
-  }
-
-  String get categoryDisplayName {
-    switch (category) {
-      case 'ENTREE':
-        return 'Entrée';
-      case 'PLAT':
-        return 'Plat principal';
-      case 'DESSERT':
-        return 'Dessert';
-      case 'BOISSON':
-        return 'Boisson';
-      default:
-        return category;
-    }
-  }
-
-  MealItem copyWith({
-    String? id,
-    String? name,
-    String? description,
-    String? category,
-    List<String>? ingredients,
-    String? imageUrl,
-    bool? isAvailable,
-    double? price,
-  }) {
-    return MealItem(
-      id: id ?? this.id,
-      name: name ?? this.name,
-      description: description ?? this.description,
-      category: category ?? this.category,
-      ingredients: ingredients ?? this.ingredients,
-      imageUrl: imageUrl ?? this.imageUrl,
-      isAvailable: isAvailable ?? this.isAvailable,
-      price: price ?? this.price,
-    );
-  }
-
-  @override
-  bool operator ==(Object other) {
-    if (identical(this, other)) return true;
-    return other is MealItem && other.id == id;
-  }
-
-  @override
-  int get hashCode => id.hashCode;
-
-  @override
-  String toString() {
-    return 'MealItem(id: $id, name: $name, category: $category, isAvailable: $isAvailable)';
   }
 }

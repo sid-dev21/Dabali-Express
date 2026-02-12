@@ -45,23 +45,28 @@ export const getAllMenus = async (req: Request, res: Response): Promise<void> =>
 // Allows to get weekly menus for a school (only approved ones)
 export const getWeeklyMenus = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { school_id, start_date } = req.query;
+    const schoolId = (req.params.schoolId || req.query.school_id) as string | undefined;
+    const startDateInput = req.query.start_date as string | undefined;
 
-    if (!school_id || !start_date) {
+    if (!schoolId) {
       res.status(400).json({
         success: false,
-        message: 'School ID and start date are required.'
+        message: 'School ID is required.'
       } as ApiResponse);
       return;
     }
 
-    const startDate = new Date(start_date as string);
+    const now = new Date();
+    const defaultWeekStart = new Date(now);
+    defaultWeekStart.setDate(now.getDate() - (now.getDay() === 0 ? 6 : now.getDay() - 1));
+    defaultWeekStart.setHours(0, 0, 0, 0);
+    const startDate = startDateInput ? new Date(startDateInput) : defaultWeekStart;
     const endDate = new Date(startDate);
     endDate.setDate(startDate.getDate() + 6);
     endDate.setHours(23, 59, 59, 999);
 
     const menus = await Menu.find({
-      school_id,
+      school_id: schoolId,
       date: { $gte: startDate, $lte: endDate },
       status: MenuStatus.APPROVED
     })

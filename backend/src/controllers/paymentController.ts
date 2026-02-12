@@ -18,7 +18,11 @@ export const getAllPayments = async (req: Request, res: Response): Promise<void>
     if (status) query.status = status;
 
     const payments = await Payment.find(query)
-      .populate('subscription_id', 'student_id start_date end_date')
+      .populate({
+        path: 'subscription_id',
+        select: 'student_id start_date end_date',
+        populate: { path: 'student_id', select: 'first_name last_name' },
+      })
       .populate('parent_id', 'first_name last_name email')
       .sort({ created_at: -1 });
 
@@ -63,7 +67,11 @@ export const getPaymentById = async (req: Request, res: Response): Promise<void>
     const { id } = req.params;
 
     const payment = await Payment.findById(id)
-      .populate('subscription_id', 'student_id start_date end_date')
+      .populate({
+        path: 'subscription_id',
+        select: 'student_id start_date end_date',
+        populate: { path: 'student_id', select: 'first_name last_name' },
+      })
       .populate('parent_id', 'first_name last_name email');
 
     if (!payment) {
@@ -93,7 +101,29 @@ export const verifyPayment = async (req: Request, res: Response): Promise<void> 
     const { id } = req.params;
     const { status } = req.body;
 
-    if (!status || !['COMPLETED', 'FAILED'].includes(status)) {
+    if (!status) {
+      const currentPayment = await Payment.findById(id)
+        .populate({
+          path: 'subscription_id',
+          select: 'student_id start_date end_date',
+          populate: { path: 'student_id', select: 'first_name last_name' },
+        })
+        .populate('parent_id', 'first_name last_name email');
+      if (!currentPayment) {
+        res.status(404).json({
+          success: false,
+          message: 'Payment not found.'
+        } as ApiResponse);
+        return;
+      }
+      res.json({
+        success: true,
+        data: currentPayment
+      } as ApiResponse);
+      return;
+    }
+
+    if (!['COMPLETED', 'FAILED'].includes(status)) {
       res.status(400).json({
         success: false,
         message: 'Valid payment status is required.'
@@ -109,7 +139,11 @@ export const verifyPayment = async (req: Request, res: Response): Promise<void> 
         updated_at: new Date()
       },
       { new: true }
-    ).populate('subscription_id', 'student_id start_date end_date')
+    ).populate({
+      path: 'subscription_id',
+      select: 'student_id start_date end_date',
+      populate: { path: 'student_id', select: 'first_name last_name' },
+    })
      .populate('parent_id', 'first_name last_name email');
 
     if (!payment) {
@@ -172,7 +206,11 @@ export const createPayment = async (req: Request, res: Response): Promise<void> 
 
     // Return populated payment
     const populatedPayment = await Payment.findById(payment._id)
-      .populate('subscription_id', 'student_id start_date end_date')
+      .populate({
+        path: 'subscription_id',
+        select: 'student_id start_date end_date',
+        populate: { path: 'student_id', select: 'first_name last_name' },
+      })
       .populate('parent_id', 'first_name last_name email');
 
     res.status(201).json({
@@ -202,7 +240,11 @@ export const simulatePaymentConfirmation = async (req: Request, res: Response): 
         updated_at: new Date()
       },
       { new: true }
-    ).populate('subscription_id', 'student_id start_date end_date')
+    ).populate({
+      path: 'subscription_id',
+      select: 'student_id start_date end_date',
+      populate: { path: 'student_id', select: 'first_name last_name' },
+    })
      .populate('parent_id', 'first_name last_name email');
 
     if (!payment) {
