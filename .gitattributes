@@ -13,6 +13,7 @@
 *.yml text eol=lf
 *.yaml text eol=lf
 *.sql text eol=lf
+*.env text eol=lf
 
 # Declare files that will always have CRLF line endings on checkout.
 *.bat text eol=crlf
