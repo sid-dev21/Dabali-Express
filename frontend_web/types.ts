@@ -23,6 +23,7 @@ export interface School {
   name: string;
   address: string;
   city: string;
+  adminId?: string;
   adminName: string;
   studentCount: number;
   status: 'active' | 'inactive';
@@ -35,6 +36,7 @@ export interface Student {
   lastName: string;
   class: string;
   parentPhone: string;
+  parentId?: string;
   schoolId: string;
   subscriptionStatus: 'active' | 'warning' | 'expired' | 'none';
   qrCode: string;
@@ -47,6 +49,8 @@ export interface MenuItem {
   mealName: string;
   description: string;
   calories?: string;
+  date?: string;
+  mealType?: string;
 }
 
 export interface Payment {
@@ -65,4 +69,10 @@ export interface SystemSettings {
   monthlyRate: number;
   appName: string;
   maintenanceMode: boolean;
+}
+
+export interface LoginResponse<T = JSON> {
+  success: boolean;
+  message?: string;
+  data?: T;
 }

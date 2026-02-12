@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Utensils, Save, CheckCircle } from 'lucide-react';
-import { mockApi } from '../services/mockApi';
+import { menuApi } from '../services/api';
 import { MenuItem } from '../types';
 
 interface MenusProps {
@@ -22,20 +22,34 @@ const Menus: React.FC<MenusProps> = ({ schoolId, initialSearch = '' }) => {
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!schoolId) return;
-    const savedMenus = mockApi.getMenus(schoolId);
-    if (savedMenus && savedMenus.length > 0) {
-      setMenus(savedMenus);
-    } else {
-      setMenus(getDefaults(schoolId));
-    }
+    const loadMenus = async () => {
+      if (!schoolId) return;
+      try {
+        const savedMenus = await menuApi.getMenus(schoolId);
+        if (savedMenus && savedMenus.length > 0) {
+          setMenus(savedMenus);
+        } else {
+          setMenus(getDefaults(schoolId));
+        }
+      } catch (error) {
+        console.error('Error loading menus:', error);
+        setMenus(getDefaults(schoolId));
+      }
+    };
+    loadMenus();
   }, [schoolId]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!schoolId) return;
-    mockApi.saveMenus(menus, schoolId);
-    setSaveStatus("Planning de la semaine enregistré !");
-    setTimeout(() => setSaveStatus(null), 3000);
+    try {
+      await menuApi.saveMenus(menus, schoolId);
+      setSaveStatus("Planning de la semaine enregistré !");
+      setTimeout(() => setSaveStatus(null), 3000);
+    } catch (error) {
+      console.error('Error saving menus:', error);
+      setSaveStatus("Erreur lors de l'enregistrement");
+      setTimeout(() => setSaveStatus(null), 3000);
+    }
   };
 
   const updateMenu = (index: number, field: keyof MenuItem, value: string) => {

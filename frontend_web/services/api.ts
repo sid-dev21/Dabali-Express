@@ -1,95 +1,287 @@
-import { User, School, Student, Payment, MenuItem, LoginResponse } from '../types';
+import { User, School, Student, Payment, MenuItem, UserRole } from '../types';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-// Create a base fetch function with common headers
+type ApiResult<T = any> = {
+  success?: boolean;
+  message?: string;
+  data?: T;
+  token?: string;
+};
+
 const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
   const token = localStorage.getItem('auth_token');
-  
+
   const config: RequestInit = {
     headers: {
       'Content-Type': 'application/json',
-      ...(token && { 'Authorization': `Bearer ${token}` }),
+      ...(token && { Authorization: `Bearer ${token}` }),
       ...options.headers,
     },
     ...options,
   };
 
   const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
-  
+  const contentType = response.headers.get('content-type') || '';
+  const payload = contentType.includes('application/json') ? await response.json() : null;
+
   if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
+    const message = payload?.message || `HTTP error! status: ${response.status}`;
+    throw new Error(message);
   }
-  
-  return response.json();
+
+  return payload;
 };
 
-// Authentication API functions
+const toId = (value: any): string => {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'object') return value._id?.toString?.() || value.id?.toString?.() || '';
+  return String(value);
+};
+
+const toUserRole = (role?: string): UserRole => {
+  if (role && Object.values(UserRole).includes(role as UserRole)) {
+    return role as UserRole;
+  }
+  return UserRole.CANTEEN_MANAGER;
+};
+
+const capitalize = (value: string) => value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
+
+const toFrenchDay = (dateInput: string | Date): MenuItem['day'] => {
+  const date = new Date(dateInput);
+  const day = date.toLocaleDateString('fr-FR', { weekday: 'long' });
+  return capitalize(day) as MenuItem['day'];
+};
+
+const mapUser = (apiUser: any): User => {
+  const id = toId(apiUser);
+  const firstName = apiUser.first_name || '';
+  const lastName = apiUser.last_name || '';
+  const name = `${firstName} ${lastName}`.trim() || apiUser.name || apiUser.email || 'Utilisateur';
+
+  return {
+    id,
+    name,
+    email: apiUser.email || '',
+    role: toUserRole(apiUser.role),
+    schoolId: apiUser.schoolId,
+    schoolName: apiUser.schoolName,
+    avatar: apiUser.avatar || '',
+    status: 'active',
+    createdAt: apiUser.created_at ? new Date(apiUser.created_at).toISOString() : new Date().toISOString(),
+  };
+};
+
+const mapSchool = (apiSchool: any): School => {
+  const admin = apiSchool.admin_id;
+  const adminId = admin ? toId(admin) : apiSchool.admin_id ? toId(apiSchool.admin_id) : undefined;
+  const adminName = admin
+    ? `${admin.first_name || ''} ${admin.last_name || ''}`.trim()
+    : apiSchool.adminName || '';
+
+  return {
+    id: toId(apiSchool),
+    name: apiSchool.name || '',
+    address: apiSchool.address || '',
+    city: apiSchool.city || '',
+    adminId,
+    adminName: adminName || 'Non assignÃ©',
+    studentCount: apiSchool.studentCount || 0,
+    status: 'active',
+    lastPaymentDate: apiSchool.lastPaymentDate,
+  };
+};
+
+const mapStudent = (apiStudent: any): Student => {
+  const parent = apiStudent.parent_id;
+  const parentId = parent ? toId(parent) : apiStudent.parent_id ? toId(apiStudent.parent_id) : undefined;
+  const parentPhone = parent?.phone || apiStudent.parentPhone || '';
+  const schoolId = apiStudent.school_id ? toId(apiStudent.school_id) : '';
+  const id = toId(apiStudent);
+
+  return {
+    id,
+    firstName: apiStudent.first_name || apiStudent.firstName || '',
+    lastName: apiStudent.last_name || apiStudent.lastName || '',
+    class: apiStudent.class_name || apiStudent.class || '',
+    parentPhone,
+    parentId,
+    schoolId,
+    subscriptionStatus: apiStudent.subscriptionStatus || 'none',
+    qrCode: apiStudent.qrCode || `QR_${id}`,
+  };
+};
+
+const mapPayment = (apiPayment: any): Payment => {
+  const status = apiPayment.status === 'SUCCESS' || apiPayment.status === 'COMPLETED'
+    ? 'completed'
+    : 'pending';
+  const date = apiPayment.paid_at || apiPayment.created_at || new Date().toISOString();
+
+  return {
+    id: toId(apiPayment),
+    studentId: apiPayment.studentId || '',
+    studentName: apiPayment.studentName || 'Ã‰lÃ¨ve',
+    schoolId: apiPayment.schoolId || '',
+    amount: apiPayment.amount || 0,
+    date: new Date(date).toISOString().split('T')[0],
+    method: apiPayment.method || 'CASH',
+    status,
+  };
+};
+
+const mapMenu = (apiMenu: any): MenuItem => {
+  const id = toId(apiMenu);
+  const date = apiMenu.date || new Date().toISOString();
+  const mealName = apiMenu.mealName || apiMenu.description || (apiMenu.items?.[0] ?? apiMenu.meal_type ?? '');
+
+  return {
+    id,
+    schoolId: apiMenu.school_id ? toId(apiMenu.school_id) : '',
+    day: toFrenchDay(date),
+    mealName,
+    description: apiMenu.description || '',
+    calories: apiMenu.calories,
+    date: new Date(date).toISOString().split('T')[0],
+    mealType: apiMenu.meal_type,
+  };
+};
+
+const fetchSchools = async (): Promise<School[]> => {
+  const result: ApiResult<any[]> = await apiRequest('/schools');
+  return (result?.data || []).map(mapSchool);
+};
+
+const enrichUserWithSchool = async (user: User): Promise<User> => {
+  if (!user || user.role === UserRole.SUPER_ADMIN) return user;
+
+  try {
+    // Pour le SUPER_ADMIN, on ne cherche pas d'école associée
+    // Pour les autres rôles, on pourrait chercher l'école mais sans bloquer
+    // Pour l'instant, on retourne l'utilisateur tel quel
+    return user;
+  } catch (error) {
+    console.error('Error enriching user with school:', error);
+  }
+
+  return user;
+};
+
 export const authApi = {
-  login: async (email: string, password: string): Promise<{ success: boolean; data?: LoginResponse; message?: string }> => {
+  login: async (email: string, password: string): Promise<{ success: boolean; data?: User; message?: string }> => {
     try {
-      const result = await apiRequest('/auth/login', {
+      const result: ApiResult<any> = await apiRequest('/auth/login', {
         method: 'POST',
         body: JSON.stringify({ email, password }),
       });
 
-      if (result.success && result.token) {
+      if (result?.token) {
         localStorage.setItem('auth_token', result.token);
       }
 
-      return result;
-    } catch (error) {
-      console.error('Login error:', error);
-      return {
-        success: false,
-        message: 'Login failed. Please check your credentials.'
-      };
+      const user = result?.data ? mapUser(result.data) : undefined;
+      const enrichedUser = user ? await enrichUserWithSchool(user) : undefined;
+
+      if (enrichedUser) {
+        localStorage.setItem('current_user', JSON.stringify(enrichedUser));
+      }
+
+      return { success: !!result?.success, data: enrichedUser };
+    } catch (error: any) {
+      return { success: false, message: error.message || 'Login failed.' };
     }
   },
 
   register: async (userData: any): Promise<{ success: boolean; data?: User; token?: string; message?: string }> => {
     try {
-      const result = await apiRequest('/auth/register', {
+      const result: ApiResult<any> = await apiRequest('/auth/register', {
         method: 'POST',
         body: JSON.stringify(userData),
       });
 
-      if (result.success && result.token) {
+      if (result?.token) {
         localStorage.setItem('auth_token', result.token);
       }
 
-      return result;
-    } catch (error) {
-      console.error('Registration error:', error);
-      return {
-        success: false,
-        message: 'Registration failed.'
-      };
+      const user = result?.data ? mapUser(result.data) : undefined;
+      const enrichedUser = user ? await enrichUserWithSchool(user) : undefined;
+
+      if (enrichedUser) {
+        localStorage.setItem('current_user', JSON.stringify(enrichedUser));
+      }
+
+      return { success: !!result?.success, data: enrichedUser, token: result?.token };
+    } catch (error: any) {
+      return { success: false, message: error.message || 'Registration failed.' };
+    }
+  },
+
+  registerSchool: async (data: { schoolName: string; adminName: string; email: string; password: string; city: string }): Promise<{ success: boolean; data?: User; message?: string }> => {
+    const [first_name, ...rest] = data.adminName.trim().split(' ').filter(Boolean);
+    const last_name = rest.join(' ') || 'Admin';
+
+    const registerResult = await authApi.register({
+      email: data.email,
+      password: data.password,
+      role: UserRole.SCHOOL_ADMIN,
+      first_name: first_name || 'Admin',
+      last_name,
+    });
+
+    if (!registerResult.success || !registerResult.data) {
+      return { success: false, message: registerResult.message || 'Registration failed.' };
+    }
+
+    try {
+      const schoolResult: ApiResult<any> = await apiRequest('/schools', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: data.schoolName,
+          city: data.city,
+          admin_id: registerResult.data.id,
+        }),
+      });
+
+      if (schoolResult?.data) {
+        const mappedSchool = mapSchool(schoolResult.data);
+        const enrichedUser = { ...registerResult.data, schoolId: mappedSchool.id, schoolName: mappedSchool.name };
+        localStorage.setItem('current_user', JSON.stringify(enrichedUser));
+        return { success: true, data: enrichedUser };
+      }
+
+      return { success: true, data: registerResult.data };
+    } catch (error: any) {
+      return { success: false, message: error.message || 'School creation failed.' };
     }
   },
 
   getCurrentUser: async (): Promise<User | null> => {
     try {
-      const result = await apiRequest('/auth/me');
-      return result.data || null;
+      const result: ApiResult<any> = await apiRequest('/auth/me');
+      if (!result?.data) return null;
+
+      const user = mapUser(result.data);
+      const enrichedUser = await enrichUserWithSchool(user);
+      localStorage.setItem('current_user', JSON.stringify(enrichedUser));
+      return enrichedUser;
     } catch (error) {
-      console.error('Get current user error:', error);
-      localStorage.removeItem('auth_token'); // Remove invalid token
+      localStorage.removeItem('auth_token');
       return null;
     }
   },
 
   logout: () => {
     localStorage.removeItem('auth_token');
+    localStorage.removeItem('current_user');
   }
 };
 
-// Schools API functions
 export const schoolsApi = {
   getSchools: async (): Promise<School[]> => {
     try {
-      const result = await apiRequest('/schools');
-      return result.data || [];
+      return await fetchSchools();
     } catch (error) {
       console.error('Get schools error:', error);
       return [];
@@ -98,34 +290,34 @@ export const schoolsApi = {
 
   getSchoolById: async (id: string): Promise<School | null> => {
     try {
-      const result = await apiRequest(`/schools/${id}`);
-      return result.data || null;
+      const result: ApiResult<any> = await apiRequest(`/schools/${id}`);
+      return result?.data ? mapSchool(result.data) : null;
     } catch (error) {
       console.error('Get school error:', error);
       return null;
     }
   },
 
-  createSchool: async (schoolData: Omit<School, 'id'>): Promise<School | null> => {
+  createSchool: async (schoolData: { name: string; address?: string; city?: string; admin_id?: string }): Promise<School | null> => {
     try {
-      const result = await apiRequest('/schools', {
+      const result: ApiResult<any> = await apiRequest('/schools', {
         method: 'POST',
         body: JSON.stringify(schoolData),
       });
-      return result.data || null;
+      return result?.data ? mapSchool(result.data) : null;
     } catch (error) {
       console.error('Create school error:', error);
       return null;
     }
   },
 
-  updateSchool: async (id: string, schoolData: Partial<School>): Promise<School | null> => {
+  updateSchool: async (id: string, schoolData: Partial<{ name: string; address: string; city: string; admin_id?: string }>): Promise<School | null> => {
     try {
-      const result = await apiRequest(`/schools/${id}`, {
+      const result: ApiResult<any> = await apiRequest(`/schools/${id}`, {
         method: 'PUT',
         body: JSON.stringify(schoolData),
       });
-      return result.data || null;
+      return result?.data ? mapSchool(result.data) : null;
     } catch (error) {
       console.error('Update school error:', error);
       return null;
@@ -134,9 +326,7 @@ export const schoolsApi = {
 
   deleteSchool: async (id: string): Promise<boolean> => {
     try {
-      await apiRequest(`/schools/${id}`, {
-        method: 'DELETE',
-      });
+      await apiRequest(`/schools/${id}`, { method: 'DELETE' });
       return true;
     } catch (error) {
       console.error('Delete school error:', error);
@@ -145,13 +335,12 @@ export const schoolsApi = {
   }
 };
 
-// Students API functions
 export const studentsApi = {
   getStudents: async (schoolId?: string): Promise<Student[]> => {
     try {
-      const endpoint = schoolId ? `/students/school/${schoolId}` : '/students';
-      const result = await apiRequest(endpoint);
-      return result.data || [];
+      const endpoint = schoolId ? `/students?school_id=${schoolId}` : '/students';
+      const result: ApiResult<any[]> = await apiRequest(endpoint);
+      return (result?.data || []).map(mapStudent);
     } catch (error) {
       console.error('Get students error:', error);
       return [];
@@ -160,34 +349,45 @@ export const studentsApi = {
 
   getStudentById: async (id: string): Promise<Student | null> => {
     try {
-      const result = await apiRequest(`/students/${id}`);
-      return result.data || null;
+      const result: ApiResult<any> = await apiRequest(`/students/${id}`);
+      return result?.data ? mapStudent(result.data) : null;
     } catch (error) {
       console.error('Get student error:', error);
       return null;
     }
   },
 
-  createStudent: async (studentData: Omit<Student, 'id'>): Promise<Student | null> => {
+  createStudent: async (studentData: { firstName: string; lastName: string; class: string; schoolId: string; parentId: string; parentPhone?: string }): Promise<Student | null> => {
     try {
-      const result = await apiRequest('/students', {
+      const result: ApiResult<any> = await apiRequest('/students', {
         method: 'POST',
-        body: JSON.stringify(studentData),
+        body: JSON.stringify({
+          first_name: studentData.firstName,
+          last_name: studentData.lastName,
+          class_name: studentData.class,
+          school_id: studentData.schoolId,
+          parent_id: studentData.parentId,
+        }),
       });
-      return result.data || null;
+      return result?.data ? mapStudent(result.data) : null;
     } catch (error) {
       console.error('Create student error:', error);
       return null;
     }
   },
 
-  updateStudent: async (id: string, studentData: Partial<Student>): Promise<Student | null> => {
+  updateStudent: async (id: string, studentData: Partial<{ firstName: string; lastName: string; class: string; parentId?: string }>): Promise<Student | null> => {
     try {
-      const result = await apiRequest(`/students/${id}`, {
+      const result: ApiResult<any> = await apiRequest(`/students/${id}`, {
         method: 'PUT',
-        body: JSON.stringify(studentData),
+        body: JSON.stringify({
+          ...(studentData.firstName && { first_name: studentData.firstName }),
+          ...(studentData.lastName && { last_name: studentData.lastName }),
+          ...(studentData.class && { class_name: studentData.class }),
+          ...(studentData.parentId && { parent_id: studentData.parentId }),
+        }),
       });
-      return result.data || null;
+      return result?.data ? mapStudent(result.data) : null;
     } catch (error) {
       console.error('Update student error:', error);
       return null;
@@ -196,9 +396,7 @@ export const studentsApi = {
 
   deleteStudent: async (id: string): Promise<boolean> => {
     try {
-      await apiRequest(`/students/${id}`, {
-        method: 'DELETE',
-      });
+      await apiRequest(`/students/${id}`, { method: 'DELETE' });
       return true;
     } catch (error) {
       console.error('Delete student error:', error);
@@ -207,49 +405,49 @@ export const studentsApi = {
   }
 };
 
-// Menu API functions
 export const menuApi = {
   getMenus: async (schoolId?: string): Promise<MenuItem[]> => {
     try {
-      const endpoint = schoolId ? `/menus/school/${schoolId}` : '/menus';
-      const result = await apiRequest(endpoint);
-      return result.data || [];
+      const endpoint = schoolId ? `/menus?school_id=${schoolId}` : '/menus';
+      const result: ApiResult<any[]> = await apiRequest(endpoint);
+      return (result?.data || []).map(mapMenu);
     } catch (error) {
       console.error('Get menus error:', error);
       return [];
     }
   },
 
-  getWeeklyMenu: async (schoolId: string): Promise<MenuItem[]> => {
+  createMenu: async (menuData: { schoolId: string; date: string; mealType: string; description?: string; items?: string[] }): Promise<MenuItem | null> => {
     try {
-      const result = await apiRequest(`/menus/week/${schoolId}`);
-      return result.data || [];
-    } catch (error) {
-      console.error('Get weekly menu error:', error);
-      return [];
-    }
-  },
-
-  createMenu: async (menuData: { date: string; meal_type: string; description: string; school_id: string; price?: number; status?: string; mealName?: string }): Promise<MenuItem | null> => {
-    try {
-      const result = await apiRequest('/menus', {
+      const result: ApiResult<any> = await apiRequest('/menus', {
         method: 'POST',
-        body: JSON.stringify(menuData),
+        body: JSON.stringify({
+          school_id: menuData.schoolId,
+          date: menuData.date,
+          meal_type: menuData.mealType,
+          description: menuData.description,
+          items: menuData.items || [],
+        }),
       });
-      return result.data || null;
+      return result?.data ? mapMenu(result.data) : null;
     } catch (error) {
       console.error('Create menu error:', error);
       return null;
     }
   },
 
-  updateMenu: async (id: string, menuData: Partial<MenuItem>): Promise<MenuItem | null> => {
+  updateMenu: async (id: string, menuData: Partial<{ date: string; mealType: string; description?: string; items?: string[] }>): Promise<MenuItem | null> => {
     try {
-      const result = await apiRequest(`/menus/${id}`, {
+      const result: ApiResult<any> = await apiRequest(`/menus/${id}`, {
         method: 'PUT',
-        body: JSON.stringify(menuData),
+        body: JSON.stringify({
+          ...(menuData.date && { date: menuData.date }),
+          ...(menuData.mealType && { meal_type: menuData.mealType }),
+          ...(menuData.description !== undefined && { description: menuData.description }),
+          ...(menuData.items && { items: menuData.items }),
+        }),
       });
-      return result.data || null;
+      return result?.data ? mapMenu(result.data) : null;
     } catch (error) {
       console.error('Update menu error:', error);
       return null;
@@ -258,9 +456,7 @@ export const menuApi = {
 
   deleteMenu: async (id: string): Promise<boolean> => {
     try {
-      await apiRequest(`/menus/${id}`, {
-        method: 'DELETE',
-      });
+      await apiRequest(`/menus/${id}`, { method: 'DELETE' });
       return true;
     } catch (error) {
       console.error('Delete menu error:', error);
@@ -268,10 +464,28 @@ export const menuApi = {
     }
   },
 
-  saveMenus: async (menus: MenuItem[], schoolId?: string): Promise<boolean> => {
+  saveMenus: async (menus: MenuItem[], schoolId: string): Promise<boolean> => {
     try {
-      // This would typically be a batch save operation
-      // For now, we'll just return true to satisfy the type
+      const today = new Date();
+      const dayOrder: MenuItem['day'][] = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'];
+      const monday = new Date(today);
+      monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+
+      await Promise.all(menus.map((menu) => {
+        const dayIndex = dayOrder.indexOf(menu.day);
+        const menuDate = new Date(monday);
+        if (dayIndex >= 0) {
+          menuDate.setDate(monday.getDate() + dayIndex);
+        }
+        return menuApi.createMenu({
+          schoolId,
+          date: menuDate.toISOString().split('T')[0],
+          mealType: 'LUNCH',
+          description: menu.mealName || menu.description || '',
+          items: menu.description ? [menu.description] : [],
+        });
+      }));
+
       return true;
     } catch (error) {
       console.error('Save menus error:', error);
@@ -280,13 +494,11 @@ export const menuApi = {
   }
 };
 
-// Payments API functions
 export const paymentsApi = {
-  getPayments: async (schoolId?: string): Promise<Payment[]> => {
+  getPayments: async (_schoolId?: string): Promise<Payment[]> => {
     try {
-      const endpoint = schoolId ? `/payments/school/${schoolId}` : '/payments';
-      const result = await apiRequest(endpoint);
-      return result.data || [];
+      const result: ApiResult<any[]> = await apiRequest('/payments');
+      return (result?.data || []).map(mapPayment);
     } catch (error) {
       console.error('Get payments error:', error);
       return [];
@@ -294,13 +506,111 @@ export const paymentsApi = {
   }
 };
 
-// Notifications API functions
+export const usersApi = {
+  getUsers: async (): Promise<User[]> => {
+    try {
+      const result: ApiResult<any[]> = await apiRequest('/users');
+      return (result?.data || []).map(mapUser);
+    } catch (error) {
+      console.error('Get users error:', error);
+      return [];
+    }
+  },
+
+  updateUser: async (id: string, updates: { first_name?: string; last_name?: string; phone?: string }): Promise<User | null> => {
+    try {
+      const result: ApiResult<any> = await apiRequest(`/users/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(updates),
+      });
+      return result?.data ? mapUser(result.data) : null;
+    } catch (error) {
+      console.error('Update user error:', error);
+      return null;
+    }
+  },
+
+  deleteUser: async (id: string): Promise<boolean> => {
+    try {
+      await apiRequest(`/users/${id}`, { method: 'DELETE' });
+      return true;
+    } catch (error) {
+      console.error('Delete user error:', error);
+      return false;
+    }
+  }
+};
+
+export const subscriptionsApi = {
+  getSubscriptions: async (): Promise<any[]> => {
+    try {
+      const result: ApiResult<any[]> = await apiRequest('/subscriptions');
+      return result?.data || [];
+    } catch (error) {
+      console.error('Get subscriptions error:', error);
+      return [];
+    }
+  },
+
+  updateSubscriptionStatus: async (id: string, status: string): Promise<boolean> => {
+    try {
+      await apiRequest(`/subscriptions/${id}/status`, {
+        method: 'PUT',
+        body: JSON.stringify({ status }),
+      });
+      return true;
+    } catch (error) {
+      console.error('Update subscription status error:', error);
+      return false;
+    }
+  }
+};
+
+export const attendanceApi = {
+  getAttendance: async (schoolId?: string): Promise<any[]> => {
+    try {
+      const endpoint = schoolId ? `/attendance?school_id=${schoolId}` : '/attendance';
+      const result: ApiResult<any[]> = await apiRequest(endpoint);
+      return result?.data || [];
+    } catch (error) {
+      console.error('Get attendance error:', error);
+      return [];
+    }
+  },
+
+  markAttendance: async (payload: { student_id: string; menu_id: string; present: boolean; justified?: boolean; reason?: string }): Promise<boolean> => {
+    try {
+      await apiRequest('/attendance/mark', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      return true;
+    } catch (error) {
+      console.error('Mark attendance error:', error);
+      return false;
+    }
+  }
+};
+
+export const reportsApi = {
+  getDashboard: async (schoolId?: string): Promise<any | null> => {
+    try {
+      const endpoint = schoolId ? `/reports/dashboard?school_id=${schoolId}` : '/reports/dashboard';
+      const result: ApiResult<any> = await apiRequest(endpoint);
+      return result?.data || null;
+    } catch (error) {
+      console.error('Get dashboard report error:', error);
+      return null;
+    }
+  }
+};
+
 export const notificationsApi = {
   getNotifications: async (unreadOnly?: boolean): Promise<any[]> => {
     try {
       const endpoint = unreadOnly ? '/notifications?unread_only=true' : '/notifications';
-      const result = await apiRequest(endpoint);
-      return result.data || [];
+      const result: ApiResult<any[]> = await apiRequest(endpoint);
+      return result?.data || [];
     } catch (error) {
       console.error('Get notifications error:', error);
       return [];
@@ -309,8 +619,8 @@ export const notificationsApi = {
 
   getUnreadCount: async (): Promise<{ count: number }> => {
     try {
-      const result = await apiRequest('/notifications/unread-count');
-      return result.data || { count: 0 };
+      const result: ApiResult<any> = await apiRequest('/notifications/unread-count');
+      return result?.data || { count: 0 };
     } catch (error) {
       console.error('Get unread count error:', error);
       return { count: 0 };
@@ -319,9 +629,7 @@ export const notificationsApi = {
 
   markAsRead: async (notificationId: number): Promise<boolean> => {
     try {
-      await apiRequest(`/notifications/${notificationId}/read`, {
-        method: 'PUT',
-      });
+      await apiRequest(`/notifications/${notificationId}/read`, { method: 'PUT' });
       return true;
     } catch (error) {
       console.error('Mark notification as read error:', error);
@@ -331,9 +639,7 @@ export const notificationsApi = {
 
   markAllAsRead: async (): Promise<boolean> => {
     try {
-      await apiRequest('/notifications/read-all', {
-        method: 'PUT',
-      });
+      await apiRequest('/notifications/read-all', { method: 'PUT' });
       return true;
     } catch (error) {
       console.error('Mark all notifications as read error:', error);
@@ -342,28 +648,12 @@ export const notificationsApi = {
   }
 };
 
-// Generic API functions for backward compatibility
+// Generic API helpers
 export const api = {
-  get: async (endpoint: string) => {
-    return await apiRequest(endpoint);
-  },
-  post: async (endpoint: string, data: any) => {
-    return await apiRequest(endpoint, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  },
-  put: async (endpoint: string, data?: any) => {
-    return await apiRequest(endpoint, {
-      method: 'PUT',
-      body: data ? JSON.stringify(data) : undefined,
-    });
-  },
-  delete: async (endpoint: string) => {
-    return await apiRequest(endpoint, {
-      method: 'DELETE',
-    });
-  }
+  get: async (endpoint: string) => apiRequest(endpoint),
+  post: async (endpoint: string, data: any) => apiRequest(endpoint, { method: 'POST', body: JSON.stringify(data) }),
+  put: async (endpoint: string, data?: any) => apiRequest(endpoint, { method: 'PUT', body: data ? JSON.stringify(data) : undefined }),
+  delete: async (endpoint: string) => apiRequest(endpoint, { method: 'DELETE' }),
 };
 
 export default {
@@ -371,5 +661,10 @@ export default {
   schoolsApi,
   studentsApi,
   menuApi,
-  paymentsApi
+  paymentsApi,
+  usersApi,
+  subscriptionsApi,
+  attendanceApi,
+  reportsApi,
+  notificationsApi,
 };

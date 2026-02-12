@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Calendar, RefreshCcw, Check, X, AlertCircle, Clock, Search, ChevronRight } from 'lucide-react';
-import { mockApi } from '../services/mockApi';
+import { subscriptionsApi, studentsApi } from '../services/api';
 import { Student } from '../types';
 
 interface SubscriptionsProps {
@@ -15,8 +15,15 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ schoolId, initialSearch =
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'warning' | 'expired'>('all');
 
-  const loadData = () => {
-    setStudents(mockApi.getStudents(schoolId));
+  const loadData = async () => {
+    try {
+      // Remplacer par un vrai appel API quand disponible
+      const studentsData = await studentsApi.getStudents(schoolId);
+      setStudents(studentsData);
+    } catch (error) {
+      console.error('Erreur lors du chargement des étudiants:', error);
+      setStudents([]);
+    }
   };
 
   useEffect(() => {
@@ -34,16 +41,28 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ schoolId, initialSearch =
   const warningCount = students.filter(s => s.subscriptionStatus === 'warning').length;
   const expiredCount = students.filter(s => s.subscriptionStatus === 'expired' || s.subscriptionStatus === 'none').length;
 
-  const handleRenew = (planType: 'weekly' | 'monthly') => {
-    if (selectedStudent) {
-      const updatedStudent: Student = {
+  const handleSaveSubscription = async () => {
+    if (!selectedStudent) return;
+    
+    try {
+      // Remplacer par un vrai appel API quand disponible
+      // await studentsApi.updateStudent(selectedStudent.id, updatedStudent);
+      const updatedStudent = {
         ...selectedStudent,
         subscriptionStatus: 'active'
       };
-      mockApi.saveStudent(updatedStudent);
-      loadData();
+      console.log('Simulation: Mise à jour abonnement', updatedStudent);
+      await loadData();
       setIsModalOpen(false);
       setSelectedStudent(null);
+    } catch (error) {
+      console.error('Erreur lors de la mise à jour de l\'abonnement:', error);
+    }
+  };
+
+  const handleRenew = (planType: 'weekly' | 'monthly') => {
+    if (selectedStudent) {
+      handleSaveSubscription();
     }
   };
 

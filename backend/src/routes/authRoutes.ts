@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { register, login, getCurrentUser } from '../controllers/authController';
+import { register, login, getCurrentUser, changeTemporaryPassword } from '../controllers/authController';
 import { authMiddleware } from '../middlewares/auth';
 
 const router = Router();
@@ -10,5 +10,8 @@ router.post('/login', login);
 
 // Protected routes
 router.get('/me', authMiddleware, getCurrentUser);
+
+// Temporary password change route (for canteen managers)
+router.post('/change-temporary-password', authMiddleware, changeTemporaryPassword);
 
 export default router;

@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { Search, UserCheck, CheckCircle2, AlertCircle, Clock, Trash2, Users, Check } from 'lucide-react';
-import { mockApi } from '../services/mockApi';
+import { attendanceApi, menuApi, studentsApi, subscriptionsApi } from '../services/api';
 import { Student } from '../types';
 
 interface Log {
@@ -21,40 +20,98 @@ interface AttendanceProps {
 const Attendance: React.FC<AttendanceProps> = ({ schoolId, initialSearch = '' }) => {
   const [students, setStudents] = useState<Student[]>([]);
   const [recentLogs, setRecentLogs] = useState<Log[]>([]);
+  const [menuIdForToday, setMenuIdForToday] = useState<string | null>(null);
 
-  const loadLogs = () => {
-    const logs = mockApi.getAttendanceLogs(schoolId);
-    setRecentLogs(logs.sort((a, b) => b.time.localeCompare(a.time)));
+  const todayKey = new Date().toISOString().split('T')[0];
+
+  const getSubscriptionStatus = (subscription: any) => {
+    if (!subscription) return 'none' as const;
+    if (subscription.status === 'ACTIVE') {
+      const end = subscription.end_date ? new Date(subscription.end_date) : null;
+      if (end) {
+        const daysLeft = Math.ceil((end.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+        if (daysLeft <= 7) return 'warning' as const;
+      }
+      return 'active' as const;
+    }
+    return 'expired' as const;
+  };
+
+  const loadData = async () => {
+    try {
+      const [studentsData, attendanceData, subscriptionsData, menusData] = await Promise.all([
+        studentsApi.getStudents(schoolId),
+        attendanceApi.getAttendance(schoolId),
+        subscriptionsApi.getSubscriptions(),
+        menuApi.getMenus(schoolId),
+      ]);
+
+      const statusByStudent = new Map<string, 'active' | 'warning' | 'expired' | 'none'>();
+      (subscriptionsData || []).forEach((sub: any) => {
+        const studentId = sub.student_id?._id || sub.student_id?.id || sub.student_id;
+        if (studentId) {
+          statusByStudent.set(studentId.toString(), getSubscriptionStatus(sub));
+        }
+      });
+
+      const enrichedStudents = studentsData.map(student => ({
+        ...student,
+        subscriptionStatus: statusByStudent.get(student.id) || student.subscriptionStatus || 'none'
+      }));
+      setStudents(enrichedStudents);
+
+      const logs = (attendanceData || [])
+        .filter((log: any) => log?.date && new Date(log.date).toISOString().split('T')[0] === todayKey)
+        .map((log: any) => {
+          const student = log.student_id || {};
+          return {
+            id: log._id || log.id || Math.random().toString(36).slice(2),
+            studentId: student._id || student.id || student,
+            name: `${student.first_name || ''} ${student.last_name || ''}`.trim() || 'Eleve',
+            time: new Date(log.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            class: student.class_name || '',
+            schoolId: student.school_id ? student.school_id.toString() : ''
+          } as Log;
+        });
+      setRecentLogs(logs.sort((a, b) => b.time.localeCompare(a.time)));
+
+      const todayMenu = (menusData || []).find(menu => menu.date === todayKey);
+      setMenuIdForToday(todayMenu?.id || null);
+    } catch (error) {
+      console.error('Attendance load error:', error);
+      setStudents([]);
+      setRecentLogs([]);
+    }
   };
 
   useEffect(() => {
-    setStudents(mockApi.getStudents(schoolId));
-    loadLogs();
+    loadData();
   }, [schoolId]);
 
   const hasAlreadyEaten = (studentId: string) => {
     return recentLogs.some(log => log.studentId === studentId);
   };
 
-  const handlePointer = (student: Student) => {
+  const handlePointer = async (student: Student) => {
     if (hasAlreadyEaten(student.id)) return;
+    if (!menuIdForToday) {
+      alert("Aucun menu disponible pour aujourd'hui. Impossible de valider le passage.");
+      return;
+    }
 
-    const newLog: Log = {
-      id: `log-${Math.random().toString(36).substr(2, 9)}`,
-      studentId: student.id,
-      name: `${student.firstName} ${student.lastName}`,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      class: student.class,
-      schoolId: student.schoolId
-    };
-    
-    mockApi.saveAttendanceLog(newLog);
-    loadLogs();
+    const ok = await attendanceApi.markAttendance({
+      student_id: student.id,
+      menu_id: menuIdForToday,
+      present: true,
+    });
+
+    if (ok) {
+      loadData();
+    }
   };
 
   const removeLog = (id: string) => {
-    mockApi.removeAttendanceLog(id);
-    loadLogs();
+    setRecentLogs(prev => prev.filter(log => log.id !== id));
   };
 
   const filteredStudents = students.filter(s => 
@@ -183,3 +240,4 @@ const Attendance: React.FC<AttendanceProps> = ({ schoolId, initialSearch = '' })
 };
 
 export default Attendance;
+

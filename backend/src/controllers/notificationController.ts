@@ -1,199 +1,144 @@
-/**
- * NOTIFICATION CONTROLLER
- * 
- * Manages notifications for users, especially parents for meal notifications.
- */
-
 import { Request, Response } from 'express';
-import pool from '../config/database';
-import { ApiResponse, NotificationType } from '../types';
+import Notification from '../models/Notification';
+import { ApiResponse } from '../types';
 
-/**
- * GET ALL NOTIFICATIONS - Retrieve notifications for a user
- * GET /api/notifications
- */
+// Allows to get all notifications for a user
 export const getAllNotifications = async (req: Request, res: Response): Promise<void> => {
   try {
     const user_id = req.user?.id;
-    const unread_only = req.query.unread_only === 'true';
+    const limit = parseInt(req.query.limit as string) || 50;
+    const offset = parseInt(req.query.offset as string) || 0;
 
-    if (!user_id) {
-      res.status(401).json({
-        success: false,
-        message: 'User not authenticated.',
-      } as ApiResponse);
-      return;
-    }
+    const notifications = await Notification.find({ user_id })
+      .populate('related_student_id', 'first_name last_name')
+      .populate('related_menu_id', 'date meal_type description')
+      .sort({ created_at: -1 })
+      .limit(limit)
+      .skip(offset);
 
-    let query = `
-      SELECT n.*, s.first_name as student_first_name, s.last_name as student_last_name,
-             m.description as menu_description, m.meal_type
-      FROM notifications n
-      LEFT JOIN students s ON n.related_student_id = s.id
-      LEFT JOIN menus m ON n.related_menu_id = m.id
-      WHERE n.user_id = $1
-    `;
-
-    const params: any[] = [user_id];
-
-    if (unread_only) {
-      query += ` AND n.read = false`;
-    }
-
-    query += ' ORDER BY n.created_at DESC';
-
-    const result = await pool.query(query, params);
-
-    res.status(200).json({
+    res.json({
       success: true,
-      data: result.rows,
+      data: notifications
     } as ApiResponse);
   } catch (error) {
-    console.error('Get notifications error:', error);
+    console.error('Get all notifications error:', error);
     res.status(500).json({
       success: false,
-      message: 'Error retrieving notifications.',
+      message: 'Error retrieving notifications.'
     } as ApiResponse);
   }
 };
 
-/**
- * MARK NOTIFICATION AS READ - Mark a notification as read
- * PUT /api/notifications/:id/read
- */
-export const markNotificationAsRead = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { id } = req.params;
-    const user_id = req.user?.id;
-
-    if (!user_id) {
-      res.status(401).json({
-        success: false,
-        message: 'User not authenticated.',
-      } as ApiResponse);
-      return;
-    }
-
-    const result = await pool.query(
-      `UPDATE notifications 
-       SET read = true 
-       WHERE id = $1 AND user_id = $2
-       RETURNING *`,
-      [id, user_id]
-    );
-
-    if (result.rows.length === 0) {
-      res.status(404).json({
-        success: false,
-        message: 'Notification not found or access denied.',
-      } as ApiResponse);
-      return;
-    }
-
-    res.status(200).json({
-      success: true,
-      message: 'Notification marked as read.',
-      data: result.rows[0],
-    } as ApiResponse);
-  } catch (error) {
-    console.error('Mark notification as read error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error marking notification as read.',
-    } as ApiResponse);
-  }
-};
-
-/**
- * MARK ALL NOTIFICATIONS AS READ - Mark all notifications for a user as read
- * PUT /api/notifications/read-all
- */
-export const markAllNotificationsAsRead = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const user_id = req.user?.id;
-
-    if (!user_id) {
-      res.status(401).json({
-        success: false,
-        message: 'User not authenticated.',
-      } as ApiResponse);
-      return;
-    }
-
-    const result = await pool.query(
-      `UPDATE notifications 
-       SET read = true 
-       WHERE user_id = $1 AND read = false
-       RETURNING *`,
-      [user_id]
-    );
-
-    res.status(200).json({
-      success: true,
-      message: `${result.rows.length} notifications marked as read.`,
-      data: result.rows,
-    } as ApiResponse);
-  } catch (error) {
-    console.error('Mark all notifications as read error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error marking all notifications as read.',
-    } as ApiResponse);
-  }
-};
-
-/**
- * CREATE NOTIFICATION - Create a new notification (internal function)
- */
-export const createNotification = async (
-  user_id: number,
-  title: string,
-  message: string,
-  type: NotificationType,
-  related_student_id?: number,
-  related_menu_id?: number
-): Promise<void> => {
-  try {
-    await pool.query(
-      `INSERT INTO notifications (user_id, title, message, type, related_student_id, related_menu_id)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [user_id, title, message, type, related_student_id, related_menu_id]
-    );
-  } catch (error) {
-    console.error('Create notification error:', error);
-  }
-};
-
-/**
- * GET UNREAD COUNT - Get count of unread notifications for a user
- * GET /api/notifications/unread-count
- */
+// Allows to get count of unread notifications for a user
 export const getUnreadCount = async (req: Request, res: Response): Promise<void> => {
   try {
     const user_id = req.user?.id;
 
-    if (!user_id) {
-      res.status(401).json({
-        success: false,
-        message: 'User not authenticated.',
-      } as ApiResponse);
-      return;
-    }
+    const count = await Notification.countDocuments({ 
+      user_id, 
+      read: false 
+    });
 
-    const result = await pool.query(
-      'SELECT COUNT(*) as count FROM notifications WHERE user_id = $1 AND read = false',
-      [user_id]
-    );
-
-    res.status(200).json({
+    res.json({
       success: true,
-      data: { count: parseInt(result.rows[0].count) },
+      data: { count }
     } as ApiResponse);
   } catch (error) {
     console.error('Get unread count error:', error);
     res.status(500).json({
       success: false,
-      message: 'Error retrieving unread count.',
+      message: 'Error retrieving unread count.'
+    } as ApiResponse);
+  }
+};
+
+// Allows to mark a notification as read
+export const markAsRead = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const user_id = req.user?.id;
+
+    const notification = await Notification.findOneAndUpdate(
+      { _id: id, user_id },
+      { read: true, updated_at: new Date() },
+      { new: true }
+    ).populate('related_student_id', 'first_name last_name')
+     .populate('related_menu_id', 'date meal_type description');
+
+    if (!notification) {
+      res.status(404).json({
+        success: false,
+        message: 'Notification not found.'
+      } as ApiResponse);
+      return;
+    }
+
+    res.json({
+      success: true,
+      message: 'Notification marked as read.',
+      data: notification
+    } as ApiResponse);
+  } catch (error) {
+    console.error('Mark as read error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error marking notification as read.'
+    } as ApiResponse);
+  }
+};
+
+// Allows to mark all notifications as read
+export const markAllAsRead = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const user_id = req.user?.id;
+
+    const result = await Notification.updateMany(
+      { user_id, read: false },
+      { read: true, updated_at: new Date() }
+    );
+
+    res.json({
+      success: true,
+      message: 'All notifications marked as read.',
+      data: { 
+        modified_count: result.modifiedCount 
+      }
+    } as ApiResponse);
+  } catch (error) {
+    console.error('Mark all as read error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error marking all notifications as read.'
+    } as ApiResponse);
+  }
+};
+
+// Allows to delete a notification
+export const deleteNotification = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const user_id = req.user?.id;
+
+    const notification = await Notification.findOneAndDelete({ _id: id, user_id });
+
+    if (!notification) {
+      res.status(404).json({
+        success: false,
+        message: 'Notification not found.'
+      } as ApiResponse);
+      return;
+    }
+
+    res.json({
+      success: true,
+      message: 'Notification deleted successfully.',
+      data: notification
+    } as ApiResponse);
+  } catch (error) {
+    console.error('Delete notification error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting notification.'
     } as ApiResponse);
   }
 };

@@ -1,180 +1,172 @@
 import { Request, Response } from 'express';
-import pool from '../config/database';
+import Attendance from '../models/Attendance';
+import Student from '../models/Student';
+import Menu from '../models/Menu';
+import Notification from '../models/Notification';
 import { ApiResponse, MarkAttendanceDTO, NotificationType } from '../types';
 
-/**
- * ATTENDANCE CONTROLLER
- *
- * Manages student attendance at the cafeteria, including justified absences.
- */
-
-/**
- * GET ATTENDANCE
- * GET /api/attendance
- */
+// Allows to get attendance records with optional filters (student, date, school) and populated student and menu info
 export const getAttendance = async (req: Request, res: Response): Promise<void> => {
   try {
-    const student_id = req.query.student_id as string | undefined;
-    const date = req.query.date as string | undefined;
-    const school_id = req.query.school_id as string | undefined;
+    const student_id = req.query.student_id as string;
+    const date = req.query.date as string;
+    const school_id = req.query.school_id as string;
 
-    let query = `
-      SELECT a.*, s.first_name, s.last_name, s.school_id, m.date as menu_date
-      FROM attendance a
-      JOIN students s ON a.student_id = s.id
-      JOIN menus m ON a.menu_id = m.id
-      WHERE 1=1
-    `;
-
-    const params: any[] = [];
-    let paramCount = 1;
-
-    if (student_id) {
-      query += ` AND a.student_id = $${paramCount}`;
-      params.push(student_id);
-      paramCount++;
-    }
-
+    // Build query
+    let query: any = {};
+    
+    if (student_id) query.student_id = student_id;
     if (date) {
-      query += ` AND a.date = $${paramCount}`;
-      params.push(date);
-      paramCount++;
+      const startDate = new Date(date);
+      const endDate = new Date(date);
+      endDate.setHours(23, 59, 59, 999);
+      query.date = { $gte: startDate, $lte: endDate };
     }
 
+    // Get attendance with populated data
+    let attendanceQuery = Attendance.find(query)
+      .populate('student_id', 'first_name last_name school_id')
+      .populate('menu_id', 'date meal_type description')
+      .sort({ date: -1 });
+
+    const attendance = await attendanceQuery;
+
+    // Filter by school_id if provided
+    let filteredAttendance = attendance;
     if (school_id) {
-      query += ` AND s.school_id = $${paramCount}`;
-      params.push(school_id);
-      paramCount++;
+      filteredAttendance = attendance.filter((a: any) => 
+        a.student_id && (a.student_id as any).school_id && 
+        (a.student_id as any).school_id.toString() === school_id
+      );
     }
 
-    query += ' ORDER BY a.date DESC';
-
-    const result = await pool.query(query, params);
-
-    res.status(200).json({
+    res.json({
       success: true,
-      data: result.rows,
+      data: filteredAttendance
     } as ApiResponse);
   } catch (error) {
     console.error('Get attendance error:', error);
     res.status(500).json({
       success: false,
-      message: 'Error retrieving attendance.',
+      message: 'Error retrieving attendance records.'
     } as ApiResponse);
   }
 };
 
-/**
- * MARK ATTENDANCE
- * POST /api/attendance/mark
- */
+// Allows to mark attendance for a student for a specific menu and create a notification for the parent
 export const markAttendance = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { student_id, menu_id, date, present, justified, reason }: MarkAttendanceDTO =
-      req.body;
+    const { student_id, menu_id, present, justified, reason }: MarkAttendanceDTO = req.body;
 
-    if (!student_id || !menu_id || !date || typeof present !== 'boolean') {
+    // Validate required fields
+    if (!student_id || !menu_id || present === undefined) {
       res.status(400).json({
         success: false,
-        message: 'Student, menu, date and present fields are required.',
+        message: 'Student ID, Menu ID, and presence status are required.'
       } as ApiResponse);
       return;
     }
 
-    // Business rules for justified absences
-    let finalJustified = justified ?? false;
-    let finalReason = reason ?? null;
+    // Check if attendance already exists
+    const existingAttendance = await Attendance.findOne({
+      student_id,
+      menu_id
+    });
 
-    if (present) {
-      // If the student is present, no justification or reason is needed
-      finalJustified = false;
-      finalReason = null;
-    } else if (!present && finalJustified && !finalReason) {
-      // Justified absence => reason is required
+    if (existingAttendance) {
       res.status(400).json({
         success: false,
-        message: 'Reason is required for justified absences.',
+        message: 'Attendance already marked for this student and menu.'
       } as ApiResponse);
       return;
     }
 
-    // Check if a record already exists for this (student, menu, date) combination
-    const existing = await pool.query(
-      `SELECT * FROM attendance
-       WHERE student_id = $1 AND menu_id = $2 AND date = $3`,
-      [student_id, menu_id, date]
-    );
+    // Get student and menu information
+    const student = await Student.findById(student_id).populate('parent_id');
+    const menu = await Menu.findById(menu_id);
 
-    let result;
-
-    if (existing.rows.length > 0) {
-      // UPDATE existing record
-      result = await pool.query(
-        `UPDATE attendance
-         SET present = $1,
-             justified = $2,
-             reason = $3,
-             marked_at = CURRENT_TIMESTAMP
-         WHERE id = $4
-         RETURNING *`,
-        [present, finalJustified, finalReason, existing.rows[0].id]
-      );
-    } else {
-      // INSERT new record
-      result = await pool.query(
-        `INSERT INTO attendance (student_id, menu_id, date, present, justified, reason, marked_at)
-         VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
-         RETURNING *`,
-        [student_id, menu_id, date, present, finalJustified, finalReason]
-      );
+    if (!student || !menu) {
+      res.status(404).json({
+        success: false,
+        message: 'Student or menu not found.'
+      } as ApiResponse);
+      return;
     }
 
-    // Get student and menu information for notification
-    const studentInfo = await pool.query(
-      'SELECT s.*, u.email as parent_email, u.first_name as parent_first_name, u.last_name as parent_last_name FROM students s JOIN users u ON s.parent_id = u.id WHERE s.id = $1',
-      [student_id]
-    );
+    // Create attendance record
+    const attendance = new Attendance({
+      student_id,
+      menu_id,
+      date: new Date(),
+      present,
+      justified: justified || false,
+      reason: reason || null,
+      marked_by: req.user?.id
+    });
 
-    const menuInfo = await pool.query(
-      'SELECT * FROM menus WHERE id = $1',
-      [menu_id]
-    );
+    await attendance.save();
 
-    if (studentInfo.rows.length > 0 && menuInfo.rows.length > 0) {
-      const student = studentInfo.rows[0];
-      const menu = menuInfo.rows[0];
-      
-      // Create notification for parent
+    // Create notification for parent
+    if (student.parent_id) {
       const notificationTitle = present ? 'Repas Pris' : 'Repas Manqué';
       const notificationMessage = present 
         ? `${student.first_name} ${student.last_name} a pris son repas (${menu.meal_type}) aujourd'hui. Menu: ${menu.description || 'Non spécifié'}`
-        : `${student.first_name} ${student.last_name} n'a pas pris son repas (${menu.meal_type}) aujourd'hui.${finalJustified && finalReason ? ` Motif: ${finalReason}` : ''}`;
+        : `${student.first_name} ${student.last_name} n'a pas pris son repas (${menu.meal_type}) aujourd'hui.${justified && reason ? ` Motif: ${reason}` : ''}`;
 
-      await pool.query(
-        `INSERT INTO notifications (user_id, title, message, type, related_student_id, related_menu_id)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [
-          student.parent_id,
-          notificationTitle,
-          notificationMessage,
-          present ? NotificationType.MEAL_TAKEN : NotificationType.MEAL_MISSED,
-          student_id,
-          menu_id
-        ]
-      );
+      const notification = new Notification({
+        user_id: (student.parent_id as any)._id,
+        title: notificationTitle,
+        message: notificationMessage,
+        type: present ? NotificationType.MEAL_TAKEN : NotificationType.MEAL_MISSED,
+        related_student_id: student_id,
+        related_menu_id: menu_id
+      });
+
+      await notification.save();
     }
 
-    res.status(200).json({
+    res.status(201).json({
       success: true,
-      message: 'Attendance saved successfully.',
-      data: result.rows[0],
+      message: 'Attendance marked successfully.',
+      data: attendance
     } as ApiResponse);
   } catch (error) {
     console.error('Mark attendance error:', error);
     res.status(500).json({
       success: false,
-      message: 'Error saving attendance.',
+      message: 'Error marking attendance.'
     } as ApiResponse);
   }
 };
 
+// Allows to get attendance records for a specific student with optional date range and populated menu info
+export const getAttendanceByStudent = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { studentId } = req.params;
+    const { startDate, endDate } = req.query;
+
+    let query: any = { student_id: studentId };
+
+    if (startDate && endDate) {
+      query.date = {
+        $gte: new Date(startDate as string),
+        $lte: new Date(endDate as string)
+      };
+    }
+
+    const attendance = await Attendance.find(query)
+      .populate('menu_id', 'date meal_type description')
+      .sort({ date: -1 });
+
+    res.json({
+      success: true,
+      data: attendance
+    } as ApiResponse);
+  } catch (error) {
+    console.error('Get attendance by student error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error retrieving student attendance.'
+    } as ApiResponse);
+  }
+};

@@ -29,12 +29,12 @@ class StorageService {
   }
 
   // ===== USER ID (SharedPreferences) =====
-  Future<void> saveUserId(int userId) async {
-    await _prefs?.setInt('user_id', userId);
+  Future<void> saveUserId(String userId) async {
+    await _prefs?.setString('user_id', userId);
   }
 
-  int? getUserId() {
-    return _prefs?.getInt('user_id');
+  String? getUserId() {
+    return _prefs?.getString('user_id');
   }
 
   // ===== USER EMAIL (SharedPreferences) =====

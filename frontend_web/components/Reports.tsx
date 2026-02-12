@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { FileText, Download, Calendar, Users, Utensils, TrendingUp, PieChart } from 'lucide-react';
-import { mockApi } from '../services/mockApi';
+import { reportsApi } from '../services/api';
 import { Student } from '../types';
 
 interface ReportsProps {

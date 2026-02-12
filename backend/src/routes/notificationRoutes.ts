@@ -2,8 +2,8 @@ import { Router } from 'express';
 import { authMiddleware } from '../middlewares/auth';
 import {
   getAllNotifications,
-  markNotificationAsRead,
-  markAllNotificationsAsRead,
+  markAsRead,
+  markAllAsRead,
   getUnreadCount
 } from '../controllers/notificationController';
 
@@ -31,13 +31,13 @@ router.get('/unread-count', getUnreadCount);
  * @desc    Mark a notification as read
  * @access  Private
  */
-router.put('/:id/read', markNotificationAsRead);
+router.put('/:id/read', markAsRead);
 
 /**
  * @route   PUT /api/notifications/read-all
  * @desc    Mark all notifications as read for the authenticated user
  * @access  Private
  */
-router.put('/read-all', markAllNotificationsAsRead);
+router.put('/read-all', markAllAsRead);
 
 export default router;

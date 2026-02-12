@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import {
   getAllMenus,
-  getWeekMenu,
+  getWeeklyMenus,
   getMenuById,
   createMenu,
   updateMenu,
@@ -22,7 +22,7 @@ router.use(authMiddleware);
 router.get('/', getAllMenus);
 
 // Get week menu
-router.get('/week/:schoolId', getWeekMenu);
+router.get('/week/:schoolId', getWeeklyMenus);
 
 // Get menu by ID
 router.get('/:id', getMenuById);

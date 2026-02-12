@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { CreditCard, Search, ArrowUpRight, Clock, Target } from 'lucide-react';
-import { mockApi } from '../services/mockApi';
-import { Payment } from '../types';
+import { paymentsApi, studentsApi } from '../services/api';
+import { Payment, Student } from '../types';
 
 interface PaymentsProps {
   schoolId?: string;
@@ -16,8 +16,29 @@ const Payments: React.FC<PaymentsProps> = ({ schoolId, initialSearch = '' }) => 
     setSearchTerm(initialSearch);
   }, [initialSearch]);
 
-  const payments = useMemo(() => mockApi.getPayments(schoolId), [schoolId]);
-  const students = useMemo(() => mockApi.getStudents(schoolId), [schoolId]);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
+
+  // Charger les données depuis l'API
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        // Remplacer par de vrais appels API quand disponibles
+        const [paymentsData, studentsData] = await Promise.all([
+          Promise.resolve([]), // paymentsApi.getPayments(schoolId)
+          Promise.resolve([])  // studentsApi.getStudents(schoolId)
+        ]);
+        setPayments(paymentsData);
+        setStudents(studentsData);
+      } catch (error) {
+        console.error('Erreur lors du chargement des données:', error);
+        setPayments([]);
+        setStudents([]);
+      }
+    };
+    
+    loadData();
+  }, [schoolId]);
 
   const filteredPayments = useMemo(() => 
     payments.filter(p => p.studentName.toLowerCase().includes(searchTerm.toLowerCase())),

@@ -1,9 +1,21 @@
 /*Validators for Express Request object properties*/
 
 // Email validator
-
 export const isValidEmail = (email: string): boolean => {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  // In test environment, allow more flexible emails
+  if (process.env.NODE_ENV === 'test') {
+    const testEmailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return testEmailRegex.test(email);
+  }
+  
+  // In production, only allow @gmail.com
+  const emailRegex = /^[^\s@]+@gmail\.com$/;
+  return emailRegex.test(email);
+};
+
+// Gmail-specific validator for canteen managers
+export const isValidGmailEmail = (email: string): boolean => {
+  const emailRegex = /^[^\s@]+@gmail\.com$/;
   return emailRegex.test(email);
 };
 

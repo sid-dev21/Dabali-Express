@@ -21,16 +21,20 @@ class AuthProvider with ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
 
+    print('DEBUG: AuthProvider login started'); // Debug temporaire
     final result = await _authRepository.login(email, password);
+    print('DEBUG: AuthProvider result: $result'); // Debug temporaire
 
     _isLoading = false;
 
     if (result['success'] == true) {
       _currentUser = result['user'];
+      print('DEBUG: User set in provider: ${_currentUser?.email}'); // Debug temporaire
       notifyListeners();
       return true;
     } else {
       _errorMessage = result['message'];
+      print('DEBUG: Error set in provider: $_errorMessage'); // Debug temporaire
       notifyListeners();
       return false;
     }

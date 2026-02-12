@@ -1,9 +1,3 @@
-/**
- * MOBILE MONEY SERVICE - PRODUCTION VERSION
- * 
- * This file contains the integration with real Orange Money and Moov Money APIs.
- * ⚠️ To be fully implemented after obtaining API access credentials.
- */
 
 import axios from 'axios';
 

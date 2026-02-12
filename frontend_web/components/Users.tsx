@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit, Shield, ShieldAlert, X, Check, Search } from 'lucide-react';
-import { mockApi } from '../services/mockApi';
+import { Plus, Edit, Shield, ShieldAlert, X, Check, Search, UserPlus, Copy, Mail, MessageSquare } from 'lucide-react';
+import { authApi, schoolsApi } from '../services/api';
 import { User, UserRole, School } from '../types';
 
 const getInitials = (name: string) => {
@@ -23,22 +23,40 @@ const Users: React.FC<UsersProps> = ({ initialSearch = '' }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
 
-  const loadData = () => {
-    setUsers(mockApi.getUsers());
-    setSchools(mockApi.getSchools());
+  const loadData = async () => {
+    try {
+      const [usersData, schoolsData] = await Promise.all([
+        // Remplacer par un vrai appel API quand disponible
+        Promise.resolve([]), // usersApi.getUsers()
+        schoolsApi.getSchools()
+      ]);
+      setUsers(usersData);
+      setSchools(schoolsData);
+    } catch (error) {
+      console.error('Erreur lors du chargement des données:', error);
+      setUsers([]);
+      setSchools([]);
+    }
   };
 
   useEffect(() => {
     loadData();
   }, []);
 
-  const handleToggleStatus = (user: User) => {
+  const handleToggleStatus = async (user: User) => {
     const updatedUser = { ...user, status: user.status === 'active' ? 'blocked' : 'active' } as User;
-    mockApi.saveUser(updatedUser);
-    loadData();
+    
+    try {
+      // Remplacer par un vrai appel API quand disponible
+      // await usersApi.updateUser(user.id, updatedUser);
+      console.log('Simulation: Mise à jour du statut utilisateur', updatedUser);
+      await loadData();
+    } catch (error) {
+      console.error('Erreur lors de la mise à jour du statut:', error);
+    }
   };
 
-  const handleSave = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const schoolId = fd.get('schoolId') as string;
@@ -50,13 +68,24 @@ const Users: React.FC<UsersProps> = ({ initialSearch = '' }) => {
       email: fd.get('email'),
       role: fd.get('role'),
       schoolId: schoolId,
-      schoolName: school?.name,
+      schoolName: school?.name || '',
       status: editingUser?.status || 'active',
       avatar: editingUser?.avatar || '' // On laisse vide pour utiliser les initiales
     };
-    mockApi.saveUser(userData);
-    setIsModalOpen(false);
-    loadData();
+    
+    try {
+      // Remplacer par un vrai appel API quand disponible
+      // if (editingUser) {
+      //   await usersApi.updateUser(editingUser.id, userData);
+      // } else {
+      //   await usersApi.createUser(userData);
+      // }
+      console.log('Simulation: Sauvegarde utilisateur', userData);
+      setIsModalOpen(false);
+      await loadData();
+    } catch (error) {
+      console.error('Erreur lors de la sauvegarde de l\'utilisateur:', error);
+    }
   };
 
   const filteredUsers = users.filter(u => 
@@ -71,13 +100,15 @@ const Users: React.FC<UsersProps> = ({ initialSearch = '' }) => {
           <h2 className="text-2xl font-black text-slate-800">Comptes Utilisateurs</h2>
           <p className="text-sm text-slate-500 font-medium">Contrôle des accès pour les directeurs et gérants de cantine.</p>
         </div>
-        <button 
-          onClick={() => { setEditingUser(null); setIsModalOpen(true); }}
-          className="flex items-center space-x-2 bg-emerald-600 text-white px-5 py-2.5 rounded-xl hover:bg-emerald-700 transition-all shadow-md font-bold text-sm"
-        >
-          <Plus size={18} />
-          <span>Créer un Compte</span>
-        </button>
+        <div className="flex space-x-3">
+          <button 
+            onClick={() => { setEditingUser(null); setIsModalOpen(true); }}
+            className="flex items-center space-x-2 bg-emerald-600 text-white px-5 py-2.5 rounded-xl hover:bg-emerald-700 transition-all shadow-md font-bold text-sm"
+          >
+            <Plus size={18} />
+            <span>Créer un Compte</span>
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">

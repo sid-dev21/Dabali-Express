@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { School as SchoolIcon, Plus, MapPin, Trash2, X, Check, Search, Edit2, Users, Info, AlertTriangle } from 'lucide-react';
-import { mockApi } from '../services/mockApi';
+import { schoolsApi, studentsApi, authApi } from '../services/api';
 import { School } from '../types';
 
 interface SchoolsProps {
@@ -15,7 +15,15 @@ const Schools: React.FC<SchoolsProps> = ({ initialSearch = '' }) => {
   const [editingSchool, setEditingSchool] = useState<School | null>(null);
   const [schoolToDelete, setSchoolToDelete] = useState<School | null>(null);
 
-  const loadSchools = () => setSchools(mockApi.getSchools());
+  const loadSchools = async () => {
+    try {
+      const schoolsData = await schoolsApi.getSchools();
+      setSchools(schoolsData);
+    } catch (error) {
+      console.error('Erreur lors du chargement des écoles:', error);
+      setSchools([]);
+    }
+  };
 
   useEffect(() => {
     loadSchools();
@@ -45,11 +53,15 @@ const Schools: React.FC<SchoolsProps> = ({ initialSearch = '' }) => {
     setIsDeleteModalOpen(true);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (schoolToDelete) {
-      mockApi.deleteSchool(schoolToDelete.id);
-      loadSchools();
-      closeDeleteModal();
+      try {
+        await schoolsApi.deleteSchool(schoolToDelete.id);
+        await loadSchools();
+        closeDeleteModal();
+      } catch (error) {
+        console.error('Erreur lors de la suppression de l\'école:', error);
+      }
     }
   };
 
@@ -58,22 +70,31 @@ const Schools: React.FC<SchoolsProps> = ({ initialSearch = '' }) => {
     setIsModalOpen(true);
   };
 
-  const handleSave = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    const schoolData: any = {
-      id: editingSchool?.id || '',
-      name: fd.get('name'),
-      city: fd.get('city'),
-      address: fd.get('address'),
-      adminName: fd.get('adminName'),
-      studentCount: parseInt(fd.get('count') as string) || 0,
-      status: fd.get('status') as 'active' | 'inactive',
+    const formData = new FormData(e.currentTarget);
+    
+    const schoolData = {
+      name: formData.get('name') as string,
+      address: formData.get('address') as string,
+      city: formData.get('city') as string,
+      adminName: formData.get('adminName') as string,
+      studentCount: parseInt(formData.get('studentCount') as string) || 0,
+      status: formData.get('status') as 'active' | 'inactive',
       lastPaymentDate: editingSchool?.lastPaymentDate || new Date().toLocaleDateString()
     };
-    mockApi.saveSchool(schoolData);
-    closeModal();
-    loadSchools();
+    
+    try {
+      if (editingSchool) {
+        await schoolsApi.updateSchool(editingSchool.id, schoolData);
+      } else {
+        await schoolsApi.createSchool(schoolData);
+      }
+      closeModal();
+      await loadSchools();
+    } catch (error) {
+      console.error('Erreur lors de la sauvegarde de l\'école:', error);
+    }
   };
 
   const filteredSchools = schools.filter(s => 

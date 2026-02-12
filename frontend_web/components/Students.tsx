@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit, Trash2, X, Check, Users, AlertTriangle, Info } from 'lucide-react';
-import { mockApi } from '../services/mockApi';
+import { studentsApi, schoolsApi } from '../services/api';
 import { Student } from '../types';
 
 interface StudentsProps {
@@ -16,22 +15,18 @@ const Students: React.FC<StudentsProps> = ({ schoolId, initialSearch = '' }) => 
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
 
-  const loadStudents = () => {
-    setStudents(mockApi.getStudents(schoolId));
+  const loadStudents = async () => {
+    try {
+      const data = await studentsApi.getStudents(schoolId);
+      setStudents(data);
+    } catch (error) {
+      console.error('Error loading students:', error);
+      setStudents([]);
+    }
   };
 
   useEffect(() => {
     loadStudents();
-    
-    // Gestion de la touche Echap
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setIsModalOpen(false);
-        setIsDeleteModalOpen(false);
-      }
-    };
-    window.addEventListener('keydown', handleEsc);
-    return () => window.removeEventListener('keydown', handleEsc);
   }, [schoolId]);
 
   const openDeleteModal = (student: Student) => {
@@ -44,15 +39,19 @@ const Students: React.FC<StudentsProps> = ({ schoolId, initialSearch = '' }) => 
     setStudentToDelete(null);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (studentToDelete) {
-      mockApi.deleteStudent(studentToDelete.id);
-      loadStudents();
-      closeDeleteModal();
+      try {
+        await studentsApi.deleteStudent(studentToDelete.id);
+        loadStudents();
+        closeDeleteModal();
+      } catch (error) {
+        console.error('Error deleting student:', error);
+      }
     }
   };
 
-  const handleSave = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const studentData: any = {
@@ -65,10 +64,18 @@ const Students: React.FC<StudentsProps> = ({ schoolId, initialSearch = '' }) => 
       subscriptionStatus: editingStudent?.subscriptionStatus || 'none',
       qrCode: editingStudent?.qrCode || `QR_${Math.random()}`
     };
-    mockApi.saveStudent(studentData);
-    setIsModalOpen(false);
-    setEditingStudent(null);
-    loadStudents();
+    try {
+      if (editingStudent) {
+        await studentsApi.updateStudent(editingStudent.id, studentData);
+      } else {
+        await studentsApi.createStudent(studentData);
+      }
+      loadStudents();
+      setIsModalOpen(false);
+      setEditingStudent(null);
+    } catch (error) {
+      console.error('Error saving student:', error);
+    }
   };
 
   const filteredStudents = students.filter(s => 
@@ -172,7 +179,7 @@ const Students: React.FC<StudentsProps> = ({ schoolId, initialSearch = '' }) => 
         </div>
       </div>
 
-      {/* MODAL DE SUPPRESSION (ALERTE) */}
+      {/* MODAL DE SUPPRESSION */}
       {isDeleteModalOpen && (
         <div 
           className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md animate-in fade-in duration-300"

@@ -1,10 +1,9 @@
-
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
-import { TrendingUp, Users, School, CreditCard, Clock, Utensils, CheckCircle } from 'lucide-react';
+import { TrendingUp, Users, School as SchoolIcon, CreditCard, Clock, Utensils, CheckCircle } from 'lucide-react';
 import { COLORS } from '../constants';
-import { UserRole } from '../types';
-import { mockApi } from '../services/mockApi';
+import { UserRole, Student, Payment, School } from '../types';
+import { attendanceApi, paymentsApi, schoolsApi, studentsApi } from '../services/api';
 
 interface DashboardProps {
   searchQuery?: string;
@@ -38,11 +37,49 @@ const StatsCard: React.FC<{ title: string; value: string; icon: React.ReactNode;
 const Dashboard: React.FC<DashboardProps> = ({ searchQuery = '', userRole, schoolId }) => {
   const isSuperAdmin = userRole === UserRole.SUPER_ADMIN;
 
-  // Calculs basés sur les données réelles du mockApi
-  const students = useMemo(() => mockApi.getStudents(schoolId), [schoolId]);
-  const schools = useMemo(() => mockApi.getSchools(), []);
-  const payments = useMemo(() => mockApi.getPayments(schoolId), [schoolId]);
-  const dailyAttendance = useMemo(() => mockApi.getAttendanceLogs(schoolId), [schoolId]);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [schools, setSchools] = useState<School[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [attendanceLogs, setAttendanceLogs] = useState<any[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadData = async () => {
+      try {
+        const [studentsData, paymentsData, attendanceData] = await Promise.all([
+          studentsApi.getStudents(schoolId),
+          paymentsApi.getPayments(schoolId),
+          attendanceApi.getAttendance(schoolId),
+        ]);
+
+        if (cancelled) return;
+
+        setStudents(studentsData);
+        setPayments(paymentsData);
+        setAttendanceLogs(attendanceData || []);
+
+        if (isSuperAdmin) {
+          const schoolsData = await schoolsApi.getSchools();
+          if (!cancelled) setSchools(schoolsData);
+        }
+      } catch (error) {
+        console.error('Dashboard load error:', error);
+      }
+    };
+
+    loadData();
+
+    return () => { cancelled = true; };
+  }, [schoolId, isSuperAdmin]);
+
+  const todayKey = new Date().toISOString().split('T')[0];
+  const dailyAttendance = useMemo(() => {
+    return (attendanceLogs || []).filter((log: any) => {
+      if (!log?.date) return false;
+      return new Date(log.date).toISOString().split('T')[0] === todayKey;
+    });
+  }, [attendanceLogs, todayKey]);
 
   const activeSubs = students.filter(s => s.subscriptionStatus === 'active').length;
   const warningSubs = students.filter(s => s.subscriptionStatus === 'warning').length;
@@ -64,22 +101,29 @@ const Dashboard: React.FC<DashboardProps> = ({ searchQuery = '', userRole, schoo
       acts.push({
         id: `p-${p.id}`,
         user: p.studentName,
-        action: `Paiement ${p.status === 'completed' ? 'validé' : 'en attente'}`,
-        time: 'Récemment',
+        action: `Paiement ${p.status === 'completed' ? 'valide' : 'en attente'}`,
+        time: 'Recemment',
         amount: `${p.amount.toLocaleString()} FCFA`,
         schoolId: p.schoolId
       });
     });
+
     // Ajouter les derniers passages
-    dailyAttendance.slice(-2).forEach(l => {
+    dailyAttendance.slice(-2).forEach((log: any) => {
+      const student = log.student_id || {};
+      const name = `${student.first_name || ''} ${student.last_name || ''}`.trim() || 'Eleve';
+      const time = log.date
+        ? new Date(log.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        : 'Recemment';
       acts.push({
-        id: `l-${l.id}`,
-        user: l.name,
-        action: 'Passage cantine validé',
-        time: l.time,
-        schoolId: l.schoolId
+        id: `l-${log._id || log.id || Math.random().toString(36).slice(2)}`,
+        user: name,
+        action: 'Passage cantine valide',
+        time,
+        schoolId: student.school_id ? student.school_id.toString() : undefined
       });
     });
+
     return acts.sort((a, b) => b.id.localeCompare(a.id));
   }, [payments, dailyAttendance]);
 
@@ -109,7 +153,7 @@ const Dashboard: React.FC<DashboardProps> = ({ searchQuery = '', userRole, schoo
         />
         
         {isSuperAdmin ? (
-          <StatsCard title="Écoles Partenaires" value={schools.length.toString()} icon={<School size={24} />} color="bg-amber-600" />
+          <StatsCard title="Écoles Partenaires" value={schools.length.toString()} icon={<SchoolIcon size={24} />} color="bg-amber-600" />
         ) : (
           <StatsCard title="Abonnements Valides" value={(activeSubs + warningSubs).toString()} icon={<CheckCircle size={24} />} color="bg-emerald-500" />
         )}
@@ -209,3 +253,6 @@ const Dashboard: React.FC<DashboardProps> = ({ searchQuery = '', userRole, schoo
 };
 
 export default Dashboard;
+
+
+

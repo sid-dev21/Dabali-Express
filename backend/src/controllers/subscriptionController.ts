@@ -1,306 +1,260 @@
-/**
- * SUBSCRIPTION CONTROLLER
- * 
- * Manages student subscriptions.
- */
-
 import { Request, Response } from 'express';
-import pool from '../config/database';
-import { ApiResponse, CreateSubscriptionDTO, SubscriptionStatus } from '../types';
-import { calculateEndDate } from '../utils/helpers';
-import { isValidDate } from '../utils/validators';
+import Subscription from '../models/Subscription';
+import Student from '../models/Student';
+import Payment from '../models/Payment';
+import { ApiResponse, CreateSubscriptionDTO } from '../types';
 
-/**
- * GET ALL SUBSCRIPTIONS - Retrieve subscriptions (with filters)
- * GET /api/subscriptions
- */
+// Allows to get all subscriptions with optional filters (student, status) and populated student info
 export const getAllSubscriptions = async (req: Request, res: Response): Promise<void> => {
   try {
     const student_id = req.query.student_id as string;
-    const status = req.query.status as SubscriptionStatus;
+    const status = req.query.status as string;
 
-    let query = `
-      SELECT sub.*, 
-             s.first_name as student_first_name,
-             s.last_name as student_last_name,
-             sc.name as school_name
-      FROM subscriptions sub
-      JOIN students s ON sub.student_id = s.id
-      JOIN schools sc ON s.school_id = sc.id
-      WHERE 1=1
-    `;
+    // Build query
+    let query: any = {};
+    if (student_id) query.student_id = student_id;
+    if (status) query.status = status;
 
-    const params: any[] = [];
-    let paramCount = 1;
+    const subscriptions = await Subscription.find(query)
+      .populate('student_id', 'first_name last_name class_name')
+      .sort({ created_at: -1 });
 
-    if (student_id) {
-      query += ` AND sub.student_id = $${paramCount}`;
-      params.push(student_id);
-      paramCount++;
-    }
-
-    if (status) {
-      query += ` AND sub.status = $${paramCount}`;
-      params.push(status);
-      paramCount++;
-    }
-
-    query += ' ORDER BY sub.created_at DESC';
-
-    const result = await pool.query(query, params);
-
-    res.status(200).json({
+    res.json({
       success: true,
-      data: result.rows,
+      data: subscriptions
     } as ApiResponse);
   } catch (error) {
     console.error('Get all subscriptions error:', error);
     res.status(500).json({
       success: false,
-      message: 'Error retrieving subscriptions.',
+      message: 'Error retrieving subscriptions.'
     } as ApiResponse);
   }
 };
 
-/**
- * GET SUBSCRIPTION BY ID - Retrieve a subscription by ID
- * GET /api/subscriptions/:id
- */
+// Allows to get a subscription by ID with populated student info
 export const getSubscriptionById = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
 
-    const result = await pool.query(
-      `SELECT sub.*, 
-              s.first_name as student_first_name,
-              s.last_name as student_last_name,
-              sc.name as school_name,
-              u.first_name as parent_first_name,
-              u.last_name as parent_last_name,
-              (SELECT json_agg(json_build_object(
-                'id', p.id,
-                'amount', p.amount,
-                'method', p.method,
-                'status', p.status,
-                'paid_at', p.paid_at
-              )) FROM payments p WHERE p.subscription_id = sub.id) as payments
-       FROM subscriptions sub
-       JOIN students s ON sub.student_id = s.id
-       JOIN schools sc ON s.school_id = sc.id
-       JOIN users u ON s.parent_id = u.id
-       WHERE sub.id = $1`,
-      [id]
-    );
+    const subscription = await Subscription.findById(id)
+      .populate('student_id', 'first_name last_name class_name');
 
-    if (result.rows.length === 0) {
+    if (!subscription) {
       res.status(404).json({
         success: false,
-        message: 'Subscription not found.',
+        message: 'Subscription not found.'
       } as ApiResponse);
       return;
     }
 
-    res.status(200).json({
+    res.json({
       success: true,
-      data: result.rows[0],
+      data: subscription
     } as ApiResponse);
   } catch (error) {
     console.error('Get subscription by ID error:', error);
     res.status(500).json({
       success: false,
-      message: 'Error retrieving subscription.',
+      message: 'Error retrieving subscription.'
     } as ApiResponse);
   }
 };
 
-/**
- * GET SUBSCRIPTIONS BY STUDENT - Retrieve subscriptions for a student
- * GET /api/subscriptions/student/:studentId
- */
-export const getSubscriptionsByStudent = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { studentId } = req.params;
-
-    const result = await pool.query(
-      `SELECT sub.*,
-              (SELECT json_agg(json_build_object(
-                'id', p.id,
-                'amount', p.amount,
-                'method', p.method,
-                'status', p.status,
-                'reference', p.reference,
-                'paid_at', p.paid_at
-              )) FROM payments p WHERE p.subscription_id = sub.id) as payments
-       FROM subscriptions sub
-       WHERE sub.student_id = $1
-       ORDER BY sub.created_at DESC`,
-      [studentId]
-    );
-
-    res.status(200).json({
-      success: true,
-      data: result.rows,
-    } as ApiResponse);
-  } catch (error) {
-    console.error('Get subscriptions by student error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error retrieving subscriptions.',
-    } as ApiResponse);
-  }
-};
-
-/**
- * CREATE SUBSCRIPTION - Create a new subscription
- * POST /api/subscriptions
- */
+// Allows to create a subscription with validation and populated response
 export const createSubscription = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { student_id, type, start_date, amount }: CreateSubscriptionDTO = req.body;
+    const { student_id, start_date, end_date, meal_plan, price }: CreateSubscriptionDTO = req.body;
 
-    // Validation
-    if (!student_id || !type || !start_date || !amount) {
+    // Validate required fields
+    if (!student_id || !start_date || !end_date || !price) {
       res.status(400).json({
         success: false,
-        message: 'All fields are required.',
-      } as ApiResponse);
-      return;
-    }
-
-    if (!isValidDate(start_date)) {
-      res.status(400).json({
-        success: false,
-        message: 'Invalid date format. Use YYYY-MM-DD.',
-      } as ApiResponse);
-      return;
-    }
-
-    if (amount <= 0) {
-      res.status(400).json({
-        success: false,
-        message: 'Amount must be positive.',
+        message: 'Student ID, start date, end date, and price are required.'
       } as ApiResponse);
       return;
     }
 
     // Check if student exists
-    const studentCheck = await pool.query(
-      'SELECT * FROM students WHERE id = $1',
-      [student_id]
-    );
-
-    if (studentCheck.rows.length === 0) {
+    const student = await Student.findById(student_id);
+    if (!student) {
       res.status(404).json({
         success: false,
-        message: 'Student not found.',
+        message: 'Student not found.'
       } as ApiResponse);
       return;
     }
 
-    // Calculate end date
-    const startDateObj = new Date(start_date);
-    const endDateObj = calculateEndDate(startDateObj, type);
-    const end_date = endDateObj.toISOString().split('T')[0];
+    // Create subscription
+    const subscription = new Subscription({
+      student_id,
+      start_date: new Date(start_date),
+      end_date: new Date(end_date),
+      meal_plan: meal_plan || 'STANDARD',
+      price
+    });
 
-    const result = await pool.query(
-      `INSERT INTO subscriptions (student_id, start_date, end_date, type, amount, status)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING *`,
-      [student_id, start_date, end_date, type, amount, 'ACTIVE']
-    );
+    await subscription.save();
+
+    // Return populated subscription
+    const populatedSubscription = await Subscription.findById(subscription._id)
+      .populate('student_id', 'first_name last_name class_name');
 
     res.status(201).json({
       success: true,
       message: 'Subscription created successfully.',
-      data: result.rows[0],
+      data: populatedSubscription
     } as ApiResponse);
   } catch (error) {
     console.error('Create subscription error:', error);
     res.status(500).json({
       success: false,
-      message: 'Error creating subscription.',
+      message: 'Error creating subscription.'
     } as ApiResponse);
   }
 };
 
-/**
- * UPDATE SUBSCRIPTION STATUS - Update subscription status
- * PUT /api/subscriptions/:id/status
- */
+// Allows to update a subscription by ID
+export const updateSubscription = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+
+    // Remove fields that shouldn't be updated
+    delete updates._id;
+    delete updates.created_at;
+
+    // Convert dates if present
+    if (updates.start_date) updates.start_date = new Date(updates.start_date);
+    if (updates.end_date) updates.end_date = new Date(updates.end_date);
+
+    const subscription = await Subscription.findByIdAndUpdate(
+      id,
+      { ...updates, updated_at: new Date() },
+      { new: true, runValidators: true }
+    ).populate('student_id', 'first_name last_name class_name');
+
+    if (!subscription) {
+      res.status(404).json({
+        success: false,
+        message: 'Subscription not found.'
+      } as ApiResponse);
+      return;
+    }
+
+    res.json({
+      success: true,
+      message: 'Subscription updated successfully.',
+      data: subscription
+    } as ApiResponse);
+  } catch (error) {
+    console.error('Update subscription error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error updating subscription.'
+    } as ApiResponse);
+  }
+};
+
+// Allows to get subscriptions by student ID
+export const getSubscriptionsByStudent = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { studentId } = req.params;
+
+    const subscriptions = await Subscription.find({ student_id: studentId })
+      .populate('student_id', 'first_name last_name class_name')
+      .sort({ created_at: -1 });
+
+    res.json({
+      success: true,
+      data: subscriptions
+    } as ApiResponse);
+  } catch (error) {
+    console.error('Get subscriptions by student error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error retrieving subscriptions.'
+    } as ApiResponse);
+  }
+};
+
+// Allows to update subscription status
 export const updateSubscriptionStatus = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
     const { status } = req.body;
 
-    // Validation
-    if (!status || !['ACTIVE', 'EXPIRED', 'SUSPENDED'].includes(status)) {
+    if (!status) {
       res.status(400).json({
         success: false,
-        message: 'Invalid status. Use ACTIVE, EXPIRED or SUSPENDED.',
+        message: 'Status is required.'
       } as ApiResponse);
       return;
     }
 
-    const result = await pool.query(
-      `UPDATE subscriptions 
-       SET status = $1, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $2
-       RETURNING *`,
-      [status, id]
-    );
+    const subscription = await Subscription.findByIdAndUpdate(
+      id,
+      { status, updated_at: new Date() },
+      { new: true, runValidators: true }
+    ).populate('student_id', 'first_name last_name class_name');
 
-    if (result.rows.length === 0) {
+    if (!subscription) {
       res.status(404).json({
         success: false,
-        message: 'Subscription not found.',
+        message: 'Subscription not found.'
       } as ApiResponse);
       return;
     }
 
-    res.status(200).json({
+    res.json({
       success: true,
-      message: 'Subscription status updated.',
-      data: result.rows[0],
+      message: 'Subscription status updated successfully.',
+      data: subscription
     } as ApiResponse);
   } catch (error) {
     console.error('Update subscription status error:', error);
     res.status(500).json({
       success: false,
-      message: 'Error updating status.',
+      message: 'Error updating subscription status.'
     } as ApiResponse);
   }
 };
 
-/**
- * DELETE SUBSCRIPTION - Delete (cancel) a subscription
- * DELETE /api/subscriptions/:id
- */
+// Allows to delete a subscription by ID (only if it has no payments)
 export const deleteSubscription = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
 
-    const result = await pool.query(
-      'DELETE FROM subscriptions WHERE id = $1 RETURNING *',
-      [id]
-    );
-
-    if (result.rows.length === 0) {
-      res.status(404).json({
+    // Check if subscription has payments
+    const payments = await Payment.find({ subscription_id: id });
+    if (payments.length > 0) {
+      res.status(400).json({
         success: false,
-        message: 'Subscription not found.',
+        message: 'Cannot delete subscription with existing payments.'
       } as ApiResponse);
       return;
     }
 
-    res.status(200).json({
+    const subscription = await Subscription.findByIdAndDelete(id);
+
+    if (!subscription) {
+      res.status(404).json({
+        success: false,
+        message: 'Subscription not found.'
+      } as ApiResponse);
+      return;
+    }
+
+    res.json({
       success: true,
       message: 'Subscription deleted successfully.',
+      data: subscription
     } as ApiResponse);
   } catch (error) {
     console.error('Delete subscription error:', error);
     res.status(500).json({
       success: false,
-      message: 'Error deleting subscription.',
+      message: 'Error deleting subscription.'
     } as ApiResponse);
   }
 };

@@ -1,31 +1,27 @@
+// backend/src/middlewares/auth.ts
+import jwt from 'jsonwebtoken';
 import { Request, Response, NextFunction } from 'express';
-import { verifyToken } from '../utils/generateToken';
-import { ApiResponse } from '../types';
+import { JWTPayload } from '../types';
+import User from '../models/User';
 
-export const authMiddleware = (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): void => {
+export const authMiddleware = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const authHeader = req.headers.authorization;
-
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      res.status(401).json({ success: false, message: 'Non authentifié. Token manquant.' } as ApiResponse);
-      return;
+    const token = req.header('Authorization')?.replace('Bearer ', '');
+    
+    if (!token) {
+      return res.status(401).json({ message: 'Accès non autorisé' });
     }
-
-    const token = authHeader.substring(7);
-    const decoded = verifyToken(token);
-
-    if (!decoded) {
-      res.status(401).json({ success: false, message: 'Token invalide ou expiré.' } as ApiResponse);
-      return;
+    
+    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as JWTPayload;
+    const user = await User.findById(decoded.id).select('-password');
+    
+    if (!user) {
+      return res.status(401).json({ message: 'Token invalide' });
     }
-
-    req.user = decoded; // ✅ reconnu maintenant
+    
+    req.user = decoded;
     next();
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Erreur serveur lors de l\'authentification.' } as ApiResponse);
+    res.status(401).json({ message: 'Token invalide' });
   }
 };

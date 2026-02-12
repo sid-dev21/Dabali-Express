@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Settings as SettingsIcon, Save, Info, Bell, DollarSign, ShieldCheck, User as UserIcon, Mail, RefreshCw, CheckCircle2, MessageSquare, Phone, ExternalLink, Trash2 } from 'lucide-react';
-import { mockApi } from '../services/mockApi';
+import { authApi } from '../services/api';
 import { SystemSettings, User, UserRole } from '../types';
 
 const getInitials = (name: string) => {
@@ -33,14 +33,25 @@ const Settings: React.FC<SettingsProps> = ({ currentUser, onUserUpdate }) => {
 
   useEffect(() => {
     if (isSuperAdmin) {
-      setSystemSettings(mockApi.getSettings());
+      // Simulation des paramètres système (à remplacer par un vrai appel API)
+      setSystemSettings({
+        systemName: 'Dabali Express',
+        systemEmail: 'contact@dabali.bf',
+        systemPhone: '+226 00 00 00 00',
+        autoBackup: true,
+        notificationEmails: true,
+        maintenanceMode: false,
+        maxUsersPerSchool: 500,
+        subscriptionPrice: 2500,
+        trialPeriodDays: 14
+      });
     }
   }, [isSuperAdmin]);
 
   const handleSaveSystem = () => {
     if (!systemSettings) return;
     setIsSavingSystem(true);
-    mockApi.saveSettings(systemSettings);
+    // Simulation de sauvegarde (à remplacer par un vrai appel API)
     setTimeout(() => {
       setIsSavingSystem(false);
       setSuccessMsg("Configuration système mise à jour !");
@@ -51,7 +62,8 @@ const Settings: React.FC<SettingsProps> = ({ currentUser, onUserUpdate }) => {
   const handleSaveProfile = () => {
     setIsSavingProfile(true);
     const updatedUser = { ...currentUser, ...profileData } as User;
-    mockApi.saveUser(updatedUser);
+    
+    // Simulation de mise à jour (à remplacer par un vrai appel API)
     onUserUpdate(updatedUser);
     
     const storedUser = localStorage.getItem('dabali_current_user');

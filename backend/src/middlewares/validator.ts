@@ -1,12 +1,11 @@
-
 import { Request, Response, NextFunction } from 'express';
-import { validationResult } from 'express-validator';
+import { validationResult, ValidationError } from 'express-validator';
 import { ApiResponse } from '../types';
 
 
 /**
  * Middleware of validation
- * Checks the results of express-validator
+ * Checks results of express-validator
  */
 export const validate = (
   req: Request,

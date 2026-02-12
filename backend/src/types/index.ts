@@ -1,5 +1,7 @@
 /* TypeScript types for the backend domain */
 
+import { ObjectId } from 'mongodb';
+
 // Enum: fixed values for user roles
 
 export enum UserRole {
@@ -17,7 +19,6 @@ export enum SubscriptionType {
   TRIMESTER = 'TRIMESTER',
 }
 
-
 export enum SubscriptionStatus {
   ACTIVE = 'ACTIVE',
   EXPIRED = 'EXPIRED',
@@ -30,13 +31,11 @@ export enum PaymentMethod {
   CASH = 'CASH',
 }
 
-
 export enum PaymentStatus {
   PENDING = 'PENDING',
   SUCCESS = 'SUCCESS',
   FAILED = 'FAILED',
 }
-
 
 export enum MealType {
   BREAKFAST = 'BREAKFAST',
@@ -60,8 +59,10 @@ export enum NotificationType {
 
 /* Interfaces: structures for various entities in the system */
 
+// ✅ CORRECTED: id should be string (converted from ObjectId)
 export interface User {
-  id: number;
+  _id: ObjectId;  // MongoDB's default ID field
+  id?: string;    // Optional string version for convenience
   email: string;
   password: string;
   role: UserRole;
@@ -76,40 +77,42 @@ export interface User {
 export interface UserResponse extends Omit<User, 'password'> {}
 
 export interface School {
-  id: number;
+  _id: ObjectId;
+  id?: string;
   name: string;
   address?: string;
   city?: string;
-  admin_id?: number;
+  admin_id?: string | ObjectId;
   created_at: Date;
   updated_at: Date;
 }
 
 export interface Student {
-  id: number;
+  _id: ObjectId;
+  id?: string;
   first_name: string;
   last_name: string;
   class_name?: string;
-  school_id: number;
-  parent_id: number;
+  school_id: string | ObjectId;
+  parent_id: string | ObjectId;
   photo_url?: string;
-  allergies?: string[]; // Student allergies
+  allergies?: string[];
   created_at: Date;
   updated_at: Date;
 }
 
-
 export interface Menu {
-  id: number;
-  school_id: number;
+  _id: ObjectId;
+  id?: string;
+  school_id: string | ObjectId;
   date: Date;
   meal_type: MealType;
   description?: string;
-  items?: string[]; // JSON array
-  allergens?: string[]; // Allergens present in the menu
+  items?: string[];
+  allergens?: string[];
   status: MenuStatus;
-  created_by: number;
-  approved_by?: number;
+  created_by: string | ObjectId;
+  approved_by?: string | ObjectId;
   approved_at?: Date;
   rejection_reason?: string;
   created_at: Date;
@@ -117,8 +120,9 @@ export interface Menu {
 }
 
 export interface Subscription {
-  id: number;
-  student_id: number;
+  _id: ObjectId;
+  id?: string;
+  student_id: string | ObjectId;
   start_date: Date;
   end_date: Date;
   type: SubscriptionType;
@@ -129,9 +133,10 @@ export interface Subscription {
 }
 
 export interface Payment {
-  id: number;
-  subscription_id: number;
-  parent_id: number;
+  _id: ObjectId;
+  id?: string;
+  subscription_id: string | ObjectId;
+  parent_id: string | ObjectId;
   amount: number;
   method: PaymentMethod;
   status: PaymentStatus;
@@ -141,25 +146,27 @@ export interface Payment {
 }
 
 export interface Attendance {
-  id: number;
-  student_id: number;
-  menu_id: number;
+  _id: ObjectId;
+  id?: string;
+  student_id: string | ObjectId;
+  menu_id: string | ObjectId;
   date: Date;
   present: boolean;
-  justified?: boolean; // Whether the absence is justified
-  reason?: string; // Reason for a justified absence
-  marked_by?: number;
+  justified?: boolean;
+  reason?: string;
+  marked_by?: string | ObjectId;
   marked_at: Date;
 }
 
 export interface Notification {
-  id: number;
-  user_id: number;
+  _id: ObjectId;
+  id?: string;
+  user_id: string | ObjectId;
   title: string;
   message: string;
   type: NotificationType;
-  related_student_id?: number;
-  related_menu_id?: number;
+  related_student_id?: string | ObjectId;
+  related_menu_id?: string | ObjectId;
   read: boolean;
   created_at: Date;
 }
@@ -184,21 +191,21 @@ export interface CreateSchoolDTO {
   name: string;
   address?: string;
   city?: string;
-  admin_id?: number;
+  admin_id?: string;
 }
 
 export interface CreateStudentDTO {
   first_name: string;
   last_name: string;
   class_name?: string;
-  school_id: number;
-  parent_id: number;
+  school_id: string;
+  parent_id: string;
   photo_url?: string;
   allergies?: string[];
-} 
+}
 
 export interface CreateMenuDTO {
-  school_id: number;
+  school_id: string;
   date: string; // Format: YYYY-MM-DD
   meal_type: MealType;
   description?: string;
@@ -212,29 +219,29 @@ export interface ApproveMenuDTO {
 }
 
 export interface CreateSubscriptionDTO {
-  student_id: number;
+  student_id: string;
   type: SubscriptionType;
   start_date: string;
   amount: number;
 }
 
 export interface CreatePaymentDTO {
-  subscription_id: number;
+  subscription_id: string;
   amount: number;
   method: PaymentMethod;
   phone?: string; // For mobile money payments
 }
 
 export interface MarkAttendanceDTO {
-  student_id: number;
-  menu_id: number;
+  student_id: string;
+  menu_id: string;
   date: string;
   present: boolean;
   justified?: boolean;
   reason?: string;
 }
 
-// Response types 
+/* Response types */
 
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -254,12 +261,19 @@ export interface PaginationResponse<T> {
   };
 }
 
-// JWT payload structure
+// ✅ CORRECTED: JWT payload - id should be string
 export interface JWTPayload {
-  id: number;
+  id: string;  // MongoDB _id converted to string
   email: string;
   role: UserRole;
 }
 
 // Request with authenticated user
 // Defined via Express module augmentation in src/types/express.d.ts
+declare global {
+  namespace Express {
+    interface Request {
+      user?: JWTPayload;
+    }
+  }
+}
