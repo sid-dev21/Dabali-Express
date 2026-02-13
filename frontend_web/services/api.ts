@@ -60,14 +60,16 @@ const mapUser = (apiUser: any): User => {
   const firstName = apiUser.first_name || '';
   const lastName = apiUser.last_name || '';
   const name = `${firstName} ${lastName}`.trim() || apiUser.name || apiUser.email || 'Utilisateur';
+  const schoolId = apiUser.school_id ? toId(apiUser.school_id) : (apiUser.schoolId || '');
+  const schoolName = apiUser.schoolName || apiUser.school?.name || '';
 
   return {
     id,
     name,
     email: apiUser.email || '',
     role: toUserRole(apiUser.role),
-    schoolId: apiUser.schoolId,
-    schoolName: apiUser.schoolName,
+    schoolId,
+    schoolName,
     avatar: apiUser.avatar || '',
     status: 'active',
     createdAt: apiUser.created_at ? new Date(apiUser.created_at).toISOString() : new Date().toISOString(),
@@ -87,7 +89,7 @@ const mapSchool = (apiSchool: any): School => {
     address: apiSchool.address || '',
     city: apiSchool.city || '',
     adminId,
-    adminName: adminName || 'Non assignÃ©',
+    adminName: adminName || 'Non assigne',
     studentCount: apiSchool.studentCount || 0,
     status: 'active',
     lastPaymentDate: apiSchool.lastPaymentDate,
@@ -101,6 +103,7 @@ const mapStudent = (apiStudent: any): Student => {
   const schoolId = apiStudent.school_id ? toId(apiStudent.school_id) : '';
   const id = toId(apiStudent);
 
+  const hasActiveSub = !!apiStudent.active_subscription;
   return {
     id,
     firstName: apiStudent.first_name || apiStudent.firstName || '',
@@ -109,7 +112,7 @@ const mapStudent = (apiStudent: any): Student => {
     parentPhone,
     parentId,
     schoolId,
-    subscriptionStatus: apiStudent.subscriptionStatus || 'none',
+    subscriptionStatus: hasActiveSub ? 'active' : (apiStudent.subscriptionStatus || 'none'),
     qrCode: apiStudent.qrCode || `QR_${id}`,
   };
 };
@@ -120,10 +123,17 @@ const mapPayment = (apiPayment: any): Payment => {
     : 'pending';
   const date = apiPayment.paid_at || apiPayment.created_at || new Date().toISOString();
 
+  const subscription = apiPayment.subscription_id || {};
+  const studentObj = subscription.student_id || {};
+  const studentId = toId(studentObj) || toId(apiPayment.student_id) || apiPayment.studentId || '';
+  const studentName = `${studentObj.first_name || ''} ${studentObj.last_name || ''}`.trim()
+    || apiPayment.studentName
+    || 'Élève';
+
   return {
     id: toId(apiPayment),
-    studentId: apiPayment.studentId || '',
-    studentName: apiPayment.studentName || 'Ã‰lÃ¨ve',
+    studentId,
+    studentName,
     schoolId: apiPayment.schoolId || '',
     amount: apiPayment.amount || 0,
     date: new Date(date).toISOString().split('T')[0],
@@ -234,27 +244,13 @@ export const authApi = {
       return { success: false, message: registerResult.message || 'Registration failed.' };
     }
 
-    try {
-      const schoolResult: ApiResult<any> = await apiRequest('/schools', {
-        method: 'POST',
-        body: JSON.stringify({
-          name: data.schoolName,
-          city: data.city,
-          admin_id: registerResult.data.id,
-        }),
-      });
-
-      if (schoolResult?.data) {
-        const mappedSchool = mapSchool(schoolResult.data);
-        const enrichedUser = { ...registerResult.data, schoolId: mappedSchool.id, schoolName: mappedSchool.name };
-        localStorage.setItem('current_user', JSON.stringify(enrichedUser));
-        return { success: true, data: enrichedUser };
-      }
-
-      return { success: true, data: registerResult.data };
-    } catch (error: any) {
-      return { success: false, message: error.message || 'School creation failed.' };
-    }
+    // School creation requires SUPER_ADMIN token on backend.
+    // At self-registration stage, only account is created.
+    return {
+      success: true,
+      data: registerResult.data,
+      message: "Compte créé. Demandez à un Super Admin de créer/assigner l'école.",
+    };
   },
 
   getCurrentUser: async (): Promise<User | null> => {
@@ -495,15 +491,31 @@ export const menuApi = {
 };
 
 export const paymentsApi = {
-  getPayments: async (_schoolId?: string): Promise<Payment[]> => {
+  getPayments: async (schoolId?: string): Promise<Payment[]> => {
     try {
       const result: ApiResult<any[]> = await apiRequest('/payments');
-      return (result?.data || []).map(mapPayment);
+      const payments = (result?.data || []).map(mapPayment);
+
+      if (!schoolId) return payments;
+
+      const students = await studentsApi.getStudents(schoolId);
+      const studentIds = new Set(students.map((student) => student.id));
+      return payments.filter((payment) => studentIds.has(payment.studentId));
     } catch (error) {
       console.error('Get payments error:', error);
       return [];
     }
-  }
+  },
+
+  refreshPaymentStatus: async (paymentId: string): Promise<Payment | null> => {
+    try {
+      const result: ApiResult<any> = await apiRequest(`/payments/${paymentId}/verify`);
+      return result?.data ? mapPayment(result.data) : null;
+    } catch (error) {
+      console.error('Refresh payment status error:', error);
+      return null;
+    }
+  },
 };
 
 export const usersApi = {
@@ -514,6 +526,26 @@ export const usersApi = {
     } catch (error) {
       console.error('Get users error:', error);
       return [];
+    }
+  },
+
+  createUser: async (payload: {
+    email: string;
+    password: string;
+    role: UserRole;
+    first_name: string;
+    last_name: string;
+    phone?: string;
+  }): Promise<User | null> => {
+    try {
+      const result: ApiResult<any> = await apiRequest('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      return result?.data ? mapUser(result.data) : null;
+    } catch (error) {
+      console.error('Create user error:', error);
+      return null;
     }
   },
 

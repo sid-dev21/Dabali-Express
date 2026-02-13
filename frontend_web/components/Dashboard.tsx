@@ -3,7 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { TrendingUp, Users, School as SchoolIcon, CreditCard, Clock, Utensils, CheckCircle } from 'lucide-react';
 import { COLORS } from '../constants';
 import { UserRole, Student, Payment, School } from '../types';
-import { attendanceApi, paymentsApi, schoolsApi, studentsApi } from '../services/api';
+import { attendanceApi, paymentsApi, reportsApi, schoolsApi, studentsApi } from '../services/api';
 
 interface DashboardProps {
   searchQuery?: string;
@@ -41,27 +41,34 @@ const Dashboard: React.FC<DashboardProps> = ({ searchQuery = '', userRole, schoo
   const [schools, setSchools] = useState<School[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [attendanceLogs, setAttendanceLogs] = useState<any[]>([]);
+  const [globalStats, setGlobalStats] = useState<any>(null);
 
   useEffect(() => {
     let cancelled = false;
 
     const loadData = async () => {
       try {
-        const [studentsData, paymentsData, attendanceData] = await Promise.all([
-          studentsApi.getStudents(schoolId),
-          paymentsApi.getPayments(schoolId),
-          attendanceApi.getAttendance(schoolId),
-        ]);
-
-        if (cancelled) return;
-
-        setStudents(studentsData);
-        setPayments(paymentsData);
-        setAttendanceLogs(attendanceData || []);
-
         if (isSuperAdmin) {
-          const schoolsData = await schoolsApi.getSchools();
-          if (!cancelled) setSchools(schoolsData);
+          const [schoolsData, dashboardData] = await Promise.all([
+            schoolsApi.getSchools(),
+            reportsApi.getDashboard(),
+          ]);
+          if (cancelled) return;
+          setSchools(schoolsData);
+          setGlobalStats(dashboardData);
+          setStudents([]);
+          setPayments([]);
+          setAttendanceLogs([]);
+        } else {
+          const [studentsData, paymentsData, attendanceData] = await Promise.all([
+            studentsApi.getStudents(schoolId),
+            paymentsApi.getPayments(schoolId),
+            attendanceApi.getAttendance(schoolId),
+          ]);
+          if (cancelled) return;
+          setStudents(studentsData);
+          setPayments(paymentsData);
+          setAttendanceLogs(attendanceData || []);
         }
       } catch (error) {
         console.error('Dashboard load error:', error);
@@ -85,7 +92,9 @@ const Dashboard: React.FC<DashboardProps> = ({ searchQuery = '', userRole, schoo
   const warningSubs = students.filter(s => s.subscriptionStatus === 'warning').length;
   const expiredSubs = students.filter(s => s.subscriptionStatus === 'expired' || s.subscriptionStatus === 'none').length;
 
-  const totalRevenue = payments.reduce((acc, curr) => acc + curr.amount, 0);
+  const totalRevenue = isSuperAdmin
+    ? (globalStats?.monthlyTotal || 0)
+    : payments.reduce((acc, curr) => acc + curr.amount, 0);
 
   const subStatus = [
     { name: 'Actifs', value: activeSubs, color: '#10b981' },
@@ -147,7 +156,7 @@ const Dashboard: React.FC<DashboardProps> = ({ searchQuery = '', userRole, schoo
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatsCard 
           title="Élèves Inscrits" 
-          value={students.length.toLocaleString()} 
+          value={(isSuperAdmin ? (globalStats?.totalStudents || 0) : students.length).toLocaleString()} 
           icon={<Users size={24} />} 
           color="bg-emerald-600" 
         />
@@ -166,7 +175,7 @@ const Dashboard: React.FC<DashboardProps> = ({ searchQuery = '', userRole, schoo
         />
         <StatsCard 
           title="Repas du Jour" 
-          value={dailyAttendance.length.toString()} 
+          value={(isSuperAdmin ? (globalStats?.todayAttendance || 0) : dailyAttendance.length).toString()} 
           icon={<Utensils size={24} />} 
           color="bg-indigo-600" 
         />
@@ -253,6 +262,5 @@ const Dashboard: React.FC<DashboardProps> = ({ searchQuery = '', userRole, schoo
 };
 
 export default Dashboard;
-
 
 

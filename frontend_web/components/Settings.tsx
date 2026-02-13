@@ -33,17 +33,11 @@ const Settings: React.FC<SettingsProps> = ({ currentUser, onUserUpdate }) => {
 
   useEffect(() => {
     if (isSuperAdmin) {
-      // Simulation des paramètres système (à remplacer par un vrai appel API)
       setSystemSettings({
-        systemName: 'Dabali Express',
-        systemEmail: 'contact@dabali.bf',
-        systemPhone: '+226 00 00 00 00',
-        autoBackup: true,
-        notificationEmails: true,
+        appName: 'Dabali Express',
+        dailyRate: 500,
+        monthlyRate: 2500,
         maintenanceMode: false,
-        maxUsersPerSchool: 500,
-        subscriptionPrice: 2500,
-        trialPeriodDays: 14
       });
     }
   }, [isSuperAdmin]);

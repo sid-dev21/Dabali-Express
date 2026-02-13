@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { School as SchoolIcon, Plus, MapPin, Trash2, X, Check, Search, Edit2, Users, Info, AlertTriangle } from 'lucide-react';
-import { schoolsApi, studentsApi, authApi } from '../services/api';
+import { schoolsApi } from '../services/api';
 import { School } from '../types';
 
 interface SchoolsProps {
@@ -78,10 +78,6 @@ const Schools: React.FC<SchoolsProps> = ({ initialSearch = '' }) => {
       name: formData.get('name') as string,
       address: formData.get('address') as string,
       city: formData.get('city') as string,
-      adminName: formData.get('adminName') as string,
-      studentCount: parseInt(formData.get('studentCount') as string) || 0,
-      status: formData.get('status') as 'active' | 'inactive',
-      lastPaymentDate: editingSchool?.lastPaymentDate || new Date().toLocaleDateString()
     };
     
     try {
@@ -293,13 +289,13 @@ const Schools: React.FC<SchoolsProps> = ({ initialSearch = '' }) => {
                 </div>
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Effectif Total</label>
-                  <input name="count" type="number" required defaultValue={editingSchool?.studentCount} className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 font-bold text-slate-700 outline-none" />
+                  <input name="studentCount" type="number" required defaultValue={editingSchool?.studentCount} className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 font-bold text-slate-700 outline-none" />
                 </div>
               </div>
 
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Directeur / Responsable</label>
-                <input name="adminName" required defaultValue={editingSchool?.adminName} className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 font-bold text-slate-700 outline-none" />
+                <input name="adminName" defaultValue={editingSchool?.adminName} className="w-full px-5 py-3 bg-slate-100 border border-slate-200 rounded-2xl font-bold text-slate-500 outline-none" disabled />
               </div>
 
               <div className="space-y-1">
@@ -309,10 +305,7 @@ const Schools: React.FC<SchoolsProps> = ({ initialSearch = '' }) => {
 
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Statut du Partenariat</label>
-                <select name="status" defaultValue={editingSchool?.status || 'active'} className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 font-bold text-slate-700 outline-none appearance-none">
-                  <option value="active">Opérationnel (Actif)</option>
-                  <option value="inactive">Suspendu (Inactif)</option>
-                </select>
+                <input value={editingSchool?.status === 'inactive' ? 'Inactif' : 'Actif'} disabled className="w-full px-5 py-3 bg-slate-100 border border-slate-200 rounded-2xl font-bold text-slate-500 outline-none" />
               </div>
 
               <div className="pt-6 flex space-x-4 shrink-0 pb-2">

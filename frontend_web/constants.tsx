@@ -51,7 +51,7 @@ export const NAV_ITEMS = [
   { id: 'students', label: 'Élèves', icon: <UserCircle size={20} />, roles: [UserRole.SCHOOL_ADMIN, UserRole.CANTEEN_MANAGER] },
   { id: 'menus', label: 'Menus', icon: <Utensils size={20} />, roles: [UserRole.SCHOOL_ADMIN, UserRole.CANTEEN_MANAGER] },
   { id: 'subscriptions', label: 'Abonnements', icon: <Calendar size={20} />, roles: [UserRole.SCHOOL_ADMIN, UserRole.CANTEEN_MANAGER] },
-  { id: 'payments', label: 'Paiements', icon: <CreditCard size={20} />, roles: [UserRole.SCHOOL_ADMIN, UserRole.CANTEEN_MANAGER] },
+  { id: 'payments', label: 'Paiements', icon: <CreditCard size={20} />, roles: [UserRole.SCHOOL_ADMIN] },
   { id: 'attendance', label: 'Présences', icon: <CheckCircle size={20} />, roles: [UserRole.CANTEEN_MANAGER, UserRole.SCHOOL_ADMIN] },
   { id: 'settings', label: 'Paramètres', icon: <Settings size={20} />, roles: [UserRole.SUPER_ADMIN, UserRole.SCHOOL_ADMIN, UserRole.CANTEEN_MANAGER] },
 ];
@@ -84,4 +84,3 @@ export const MOCK_STUDENTS: Student[] = [
   { id: 'S5', firstName: 'Abdoul', lastName: 'Zongo', class: 'CP1', parentPhone: '75 88 99 00', schoolId: '4', subscriptionStatus: 'none', qrCode: 'QR-ABD-005' },
 
 ];
-

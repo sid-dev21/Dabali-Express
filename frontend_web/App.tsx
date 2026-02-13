@@ -121,18 +121,16 @@ const App: React.FC = () => {
 
       const schoolId = currentUser.schoolId;
 
+      const canReadPayments = currentUser.role === UserRole.SCHOOL_ADMIN;
+      const canReadStudents = currentUser.role === UserRole.SCHOOL_ADMIN || currentUser.role === UserRole.CANTEEN_MANAGER;
+      const canReadSchools = currentUser.role === UserRole.SUPER_ADMIN;
 
 
       try {
-
         const [allStudents, allSchools, allPayments] = await Promise.all([
-
-          studentsApi.getStudents(schoolId),
-
-          schoolsApi.getSchools(),
-
-          paymentsApi.getPayments(schoolId),
-
+          canReadStudents ? studentsApi.getStudents(schoolId) : Promise.resolve([]),
+          canReadSchools ? schoolsApi.getSchools() : Promise.resolve([]),
+          canReadPayments ? paymentsApi.getPayments(schoolId) : Promise.resolve([]),
         ]);
 
 
@@ -143,11 +141,7 @@ const App: React.FC = () => {
           students: allStudents
             .filter(s => `${s.firstName} ${s.lastName}`.toLowerCase().includes(term))
             .slice(0, 5),
-          schools: currentUser.role === UserRole.SUPER_ADMIN
-
-            ? allSchools.filter(s => s.name.toLowerCase().includes(term)).slice(0, 3)
-
-            : [],
+          schools: canReadSchools ? allSchools.filter(s => s.name.toLowerCase().includes(term)).slice(0, 3) : [],
 
           payments: allPayments
 

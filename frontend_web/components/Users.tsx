@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit, Shield, ShieldAlert, X, Check, Search, UserPlus, Copy, Mail, MessageSquare } from 'lucide-react';
-import { authApi, schoolsApi } from '../services/api';
+import { Plus, Edit, Shield, X, Check, Search, Trash2 } from 'lucide-react';
+import { schoolsApi, usersApi } from '../services/api';
 import { User, UserRole, School } from '../types';
 
 const getInitials = (name: string) => {
@@ -22,18 +22,20 @@ const Users: React.FC<UsersProps> = ({ initialSearch = '' }) => {
   const [schools, setSchools] = useState<School[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const loadData = async () => {
     try {
       const [usersData, schoolsData] = await Promise.all([
-        // Remplacer par un vrai appel API quand disponible
-        Promise.resolve([]), // usersApi.getUsers()
+        usersApi.getUsers(),
         schoolsApi.getSchools()
       ]);
       setUsers(usersData);
       setSchools(schoolsData);
+      setError(null);
     } catch (error) {
       console.error('Erreur lors du chargement des données:', error);
+      setError("Impossible de charger les utilisateurs.");
       setUsers([]);
       setSchools([]);
     }
@@ -43,49 +45,45 @@ const Users: React.FC<UsersProps> = ({ initialSearch = '' }) => {
     loadData();
   }, []);
 
-  const handleToggleStatus = async (user: User) => {
-    const updatedUser = { ...user, status: user.status === 'active' ? 'blocked' : 'active' } as User;
-    
-    try {
-      // Remplacer par un vrai appel API quand disponible
-      // await usersApi.updateUser(user.id, updatedUser);
-      console.log('Simulation: Mise à jour du statut utilisateur', updatedUser);
-      await loadData();
-    } catch (error) {
-      console.error('Erreur lors de la mise à jour du statut:', error);
-    }
-  };
-
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    const schoolId = fd.get('schoolId') as string;
-    const school = schools.find(s => s.id === schoolId);
-
-    const userData: any = {
-      id: editingUser?.id || '',
-      name: fd.get('name'),
-      email: fd.get('email'),
-      role: fd.get('role'),
-      schoolId: schoolId,
-      schoolName: school?.name || '',
-      status: editingUser?.status || 'active',
-      avatar: editingUser?.avatar || '' // On laisse vide pour utiliser les initiales
-    };
+    const fullName = (fd.get('name') as string || '').trim();
+    const [first_name, ...rest] = fullName.split(' ');
+    const last_name = rest.join(' ') || 'Utilisateur';
+    const email = (fd.get('email') as string || '').trim();
+    const role = fd.get('role') as UserRole;
+    const password = (fd.get('password') as string || '').trim();
     
     try {
-      // Remplacer par un vrai appel API quand disponible
-      // if (editingUser) {
-      //   await usersApi.updateUser(editingUser.id, userData);
-      // } else {
-      //   await usersApi.createUser(userData);
-      // }
-      console.log('Simulation: Sauvegarde utilisateur', userData);
+      if (editingUser) {
+        await usersApi.updateUser(editingUser.id, { first_name, last_name });
+      } else {
+        if (!password) {
+          setError("Le mot de passe est requis pour un nouveau compte.");
+          return;
+        }
+        await usersApi.createUser({
+          email,
+          password,
+          role,
+          first_name: first_name || 'Utilisateur',
+          last_name,
+        });
+      }
       setIsModalOpen(false);
+      setEditingUser(null);
+      setError(null);
       await loadData();
     } catch (error) {
       console.error('Erreur lors de la sauvegarde de l\'utilisateur:', error);
+      setError("Échec de sauvegarde utilisateur.");
     }
+  };
+
+  const handleDelete = async (id: string) => {
+    await usersApi.deleteUser(id);
+    await loadData();
   };
 
   const filteredUsers = users.filter(u => 
@@ -110,6 +108,11 @@ const Users: React.FC<UsersProps> = ({ initialSearch = '' }) => {
           </button>
         </div>
       </div>
+      {error && (
+        <div className="bg-red-50 text-red-700 border border-red-200 rounded-xl px-4 py-3 text-sm font-medium">
+          {error}
+        </div>
+      )}
 
       <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="overflow-x-auto">
@@ -150,25 +153,24 @@ const Users: React.FC<UsersProps> = ({ initialSearch = '' }) => {
                     {user.schoolName || 'Plateforme Dabali'}
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`flex items-center space-x-1.5 ${user.status === 'active' ? 'text-emerald-600' : 'text-red-500'}`}>
-                      {user.status === 'active' ? <Shield size={14} /> : <ShieldAlert size={14} />}
-                      <span className="font-black uppercase text-[10px] tracking-widest">{user.status}</span>
+                    <span className="flex items-center space-x-1.5 text-emerald-600">
+                      <Shield size={14} />
+                      <span className="font-black uppercase text-[10px] tracking-widest">active</span>
                     </span>
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex justify-end space-x-2">
                       <button 
-                        onClick={() => handleToggleStatus(user)}
-                        title={user.status === 'active' ? 'Bloquer' : 'Débloquer'}
-                        className={`p-2 rounded-lg transition-colors ${user.status === 'active' ? 'text-amber-500 hover:bg-amber-50' : 'text-emerald-500 hover:bg-emerald-50'}`}
-                      >
-                        {user.status === 'active' ? <ShieldAlert size={18} /> : <Shield size={18} />}
-                      </button>
-                      <button 
                          onClick={() => { setEditingUser(user); setIsModalOpen(true); }}
                          className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
                       >
                         <Edit size={18} />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(user.id)}
+                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      >
+                        <Trash2 size={18} />
                       </button>
                     </div>
                   </td>
@@ -215,11 +217,24 @@ const Users: React.FC<UsersProps> = ({ initialSearch = '' }) => {
                 </div>
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">École</label>
-                  <select name="schoolId" required defaultValue={editingUser?.schoolId} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl bg-white font-medium">
-                    {schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
+                  <input
+                    value={editingUser?.schoolName || 'Plateforme Dabali'}
+                    disabled
+                    className="w-full px-4 py-3 bg-slate-100 border border-slate-200 rounded-xl font-medium text-slate-500"
+                  />
                 </div>
               </div>
+              {!editingUser && (
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Mot de passe initial</label>
+                  <input
+                    name="password"
+                    type="password"
+                    required
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 font-medium"
+                  />
+                </div>
+              )}
               <div className="pt-4 flex space-x-3">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 px-4 py-3 border border-slate-200 rounded-xl font-bold text-slate-400 hover:bg-slate-50 transition-colors">Annuler</button>
                 <button type="submit" className="flex-1 px-4 py-3 bg-emerald-600 text-white rounded-xl font-black shadow-lg hover:bg-emerald-700 transition-all flex items-center justify-center space-x-2">

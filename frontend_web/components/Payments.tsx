@@ -11,6 +11,8 @@ interface PaymentsProps {
 
 const Payments: React.FC<PaymentsProps> = ({ schoolId, initialSearch = '' }) => {
   const [searchTerm, setSearchTerm] = useState(initialSearch);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setSearchTerm(initialSearch);
@@ -22,18 +24,22 @@ const Payments: React.FC<PaymentsProps> = ({ schoolId, initialSearch = '' }) => 
   // Charger les données depuis l'API
   useEffect(() => {
     const loadData = async () => {
+      setLoading(true);
+      setError(null);
       try {
-        // Remplacer par de vrais appels API quand disponibles
         const [paymentsData, studentsData] = await Promise.all([
-          Promise.resolve([]), // paymentsApi.getPayments(schoolId)
-          Promise.resolve([])  // studentsApi.getStudents(schoolId)
+          paymentsApi.getPayments(schoolId),
+          studentsApi.getStudents(schoolId)
         ]);
         setPayments(paymentsData);
         setStudents(studentsData);
       } catch (error) {
         console.error('Erreur lors du chargement des données:', error);
+        setError('Impossible de charger les paiements.');
         setPayments([]);
         setStudents([]);
+      } finally {
+        setLoading(false);
       }
     };
     
@@ -56,6 +62,11 @@ const Payments: React.FC<PaymentsProps> = ({ schoolId, initialSearch = '' }) => 
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
+      {error && (
+        <div className="bg-red-50 text-red-700 border border-red-200 rounded-xl px-4 py-3 text-sm font-medium">
+          {error}
+        </div>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 transition-all hover:shadow-md">
           <div className="flex justify-between items-center mb-4">
@@ -147,7 +158,9 @@ const Payments: React.FC<PaymentsProps> = ({ schoolId, initialSearch = '' }) => 
                 <tr>
                   <td colSpan={5} className="p-20 text-center opacity-20">
                     <CreditCard size={48} className="mx-auto mb-4" />
-                    <p className="font-black uppercase tracking-widest">Aucune transaction trouvée</p>
+                    <p className="font-black uppercase tracking-widest">
+                      {loading ? 'Chargement...' : 'Aucune transaction trouvée'}
+                    </p>
                   </td>
                 </tr>
               )}
