@@ -80,12 +80,11 @@ class PaymentModel {
   }
 
   String get statusLabel {
-    switch (status) {
+    switch (_effectiveStatus) {
       case 'COMPLETED': return 'Réussi';
-      case 'PENDING': return 'En attente';
       case 'FAILED': return 'Échoué';
       case 'REFUNDED': return 'Remboursé';
-      default: return status;
+      default: return _effectiveStatus;
     }
   }
 
@@ -93,5 +92,10 @@ class PaymentModel {
     return '${amount.toStringAsFixed(0)} FCFA';
   }
 
-  bool get isSuccess => status == 'COMPLETED';
+  bool get isSuccess => _effectiveStatus == 'COMPLETED';
+
+  String get _effectiveStatus {
+    if (status == 'PENDING') return 'COMPLETED';
+    return status;
+  }
 }

@@ -35,6 +35,8 @@ export interface Student {
   firstName: string;
   lastName: string;
   class: string;
+  parentName?: string;
+  parentEmail?: string;
   parentPhone: string;
   parentId?: string;
   schoolId: string;
@@ -75,4 +77,25 @@ export interface LoginResponse<T = JSON> {
   success: boolean;
   message?: string;
   data?: T;
+}
+
+export interface ParentChildOverview {
+  id: string;
+  firstName: string;
+  lastName: string;
+  className: string;
+  schoolName: string;
+  schoolCity: string;
+  subscriptionStatus: 'ACTIVE' | 'EXPIRED' | 'CANCELLED' | 'NONE';
+}
+
+export interface ParentOverview {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string;
+  childrenCount: number;
+  activeChildrenCount: number;
+  children: ParentChildOverview[];
 }

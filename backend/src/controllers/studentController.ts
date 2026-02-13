@@ -4,6 +4,7 @@ import School from '../models/School';
 import User from '../models/User';
 import Subscription from '../models/Subscription';
 import { ApiResponse, CreateStudentDTO, UserRole } from '../types';
+import { hashPassword } from '../utils/hashPassword';
 
 // Allows to get all students with optional filters (school, parent, class) and populated school and parent info
 export const getAllStudents = async (req: Request, res: Response): Promise<void> => {
@@ -20,12 +21,42 @@ export const getAllStudents = async (req: Request, res: Response): Promise<void>
 
     const students = await Student.find(query)
       .populate('school_id', 'name city')
-      .populate('parent_id', 'first_name last_name phone')
+      .populate('parent_id', 'first_name last_name phone email')
       .sort({ last_name: 1, first_name: 1 });
+
+    const studentIds = students.map((student) => student._id);
+    const activeSubscriptions = await Subscription.find({
+      student_id: { $in: studentIds },
+      status: 'ACTIVE',
+    })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const activeByStudentId = new Map<string, any>();
+    for (const sub of activeSubscriptions) {
+      const studentId = sub.student_id?.toString();
+      if (studentId && !activeByStudentId.has(studentId)) {
+        activeByStudentId.set(studentId, {
+          id: sub._id.toString(),
+          meal_plan: sub.meal_plan,
+          status: sub.status,
+          end_date: sub.end_date,
+          price: sub.price,
+        });
+      }
+    }
+
+    const hydratedStudents = students.map((student) => {
+      const raw = student.toObject();
+      return {
+        ...raw,
+        active_subscription: activeByStudentId.get(student._id.toString()) ?? null,
+      };
+    });
 
     res.json({
       success: true,
-      data: students
+      data: hydratedStudents
     } as ApiResponse);
   } catch (error) {
     console.error('Get all students error:', error);
@@ -121,21 +152,78 @@ export const getStudentById = async (req: Request, res: Response): Promise<void>
 // Allows to create a student with validation and populated response
 export const createStudent = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { first_name, last_name, class_name, school_id, parent_id, allergies }: CreateStudentDTO = req.body;
-    const resolvedParentId =
-      req.user?.role === UserRole.PARENT ? req.user.id : parent_id;
+    const {
+      first_name,
+      last_name,
+      class_name,
+      school_id,
+      parent_id,
+      allergies,
+      parent_first_name,
+      parent_last_name,
+      parent_phone,
+      parent_email,
+    }: CreateStudentDTO = req.body as any;
+    const actorRole = req.user?.role;
+    const resolvedSchoolId =
+      actorRole === UserRole.SCHOOL_ADMIN || actorRole === UserRole.CANTEEN_MANAGER
+        ? (await User.findById(req.user?.id).select('school_id').lean())?.school_id?.toString() || school_id
+        : school_id;
+
+    let resolvedParentId =
+      actorRole === UserRole.PARENT ? req.user?.id : parent_id;
 
     // Validate required fields
-    if (!first_name || !last_name || !school_id || !resolvedParentId) {
+    if (!first_name || !last_name || !resolvedSchoolId) {
       res.status(400).json({
         success: false,
-        message: 'First name, last name, school ID, and parent ID are required.'
+        message: 'First name, last name and school ID are required.'
+      } as ApiResponse);
+      return;
+    }
+
+    if (!resolvedParentId && actorRole !== UserRole.PARENT) {
+      if (!parent_first_name || !parent_last_name || !parent_phone) {
+        res.status(400).json({
+          success: false,
+          message: 'Parent first name, last name and phone are required when parent ID is not provided.'
+        } as ApiResponse);
+        return;
+      }
+
+      let parent = null as any;
+      if (parent_email) {
+        parent = await User.findOne({ email: parent_email, role: UserRole.PARENT });
+      }
+      if (!parent) {
+        parent = await User.findOne({ phone: parent_phone, role: UserRole.PARENT });
+      }
+      if (!parent) {
+        const generatedEmail = parent_email || `parent.${parent_phone}.${Date.now()}@gmail.com`;
+        const generatedPassword = `Parent${Math.floor(100000 + Math.random() * 900000)}A`;
+        const hashedPassword = await hashPassword(generatedPassword);
+        parent = await User.create({
+          email: generatedEmail,
+          password: hashedPassword,
+          role: UserRole.PARENT,
+          first_name: parent_first_name,
+          last_name: parent_last_name,
+          phone: parent_phone,
+        });
+      }
+      resolvedParentId = parent._id.toString();
+    }
+
+    if (!resolvedParentId) {
+      res.status(400).json({
+        success: false,
+        message: 'Parent ID is required.'
       } as ApiResponse);
       return;
     }
 
     // Check if school exists
-    const school = await School.findById(school_id);
+    const school = await School.findById(resolvedSchoolId);
     if (!school) {
       res.status(404).json({
         success: false,
@@ -159,7 +247,7 @@ export const createStudent = async (req: Request, res: Response): Promise<void> 
       first_name,
       last_name,
       class_name,
-      school_id,
+      school_id: resolvedSchoolId,
       parent_id: resolvedParentId,
       allergies: allergies || []
     });

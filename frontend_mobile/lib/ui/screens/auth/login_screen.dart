@@ -80,7 +80,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 // Titre
                 const Text(
-                  'Cantine Scolaire',
+                  'Dabali Express',
                   style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,

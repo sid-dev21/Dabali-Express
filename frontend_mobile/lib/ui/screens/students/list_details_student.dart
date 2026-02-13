@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../data/models/attendance_model.dart';
+import '../../../data/repositories/attendance_repository.dart';
 import '../../../data/models/student_model.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/payment_provider.dart';
@@ -17,6 +19,11 @@ class StudentDetailScreen extends StatefulWidget {
 }
 
 class _StudentDetailScreenState extends State<StudentDetailScreen> {
+  final AttendanceRepository _attendanceRepository = AttendanceRepository();
+  List<AttendanceModel> _attendanceRecords = [];
+  bool _isAttendanceLoading = false;
+  String? _attendanceError;
+
   @override
   void initState() {
     super.initState();
@@ -28,6 +35,7 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
   Future<void> _loadStudentData() async {
     await _loadSubscriptions();
     await _loadPayments();
+    await _loadAttendance();
   }
 
   Future<void> _loadSubscriptions() async {
@@ -41,6 +49,29 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
     final userId = authProvider.currentUser?.id;
     if (userId == null) return;
     await paymentProvider.loadPayments(userId);
+  }
+
+  Future<void> _loadAttendance() async {
+    setState(() {
+      _isAttendanceLoading = true;
+      _attendanceError = null;
+    });
+
+    try {
+      final data = await _attendanceRepository.getAttendanceByStudent(widget.student.id);
+      if (!mounted) return;
+      setState(() {
+        _attendanceRecords = data;
+        _isAttendanceLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _attendanceRecords = [];
+        _attendanceError = e.toString().replaceFirst('Exception: ', '');
+        _isAttendanceLoading = false;
+      });
+    }
   }
 
   @override
@@ -220,6 +251,66 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
                     }).toList(),
                   const SizedBox(height: 24),
                   const Text(
+                    'Présences',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  if (_isAttendanceLoading)
+                    const Center(child: CircularProgressIndicator())
+                  else if (_attendanceError != null)
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Text(
+                          _attendanceError!,
+                          style: const TextStyle(color: AppColors.error),
+                        ),
+                      ),
+                    )
+                  else if (_attendanceRecords.isEmpty)
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Center(
+                          child: Text(
+                            'Aucune présence enregistrée',
+                            style: TextStyle(color: Colors.grey[600]),
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    ..._attendanceRecords.take(10).map((attendance) {
+                      final color = attendance.present ? AppColors.success : AppColors.error;
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        child: ListTile(
+                          leading: Icon(
+                            attendance.present ? Icons.check_circle : Icons.cancel,
+                            color: color,
+                          ),
+                          title: Text(attendance.presenceLabel),
+                          subtitle: Text(
+                            attendance.menuDescription != null && attendance.menuDescription!.isNotEmpty
+                                ? '${attendance.formattedDate} - ${attendance.menuDescription}'
+                                : attendance.formattedDate,
+                          ),
+                          trailing: Text(
+                            attendance.mealType ?? '',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey[600],
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  const SizedBox(height: 24),
+                  const Text(
                     'Historique des paiements',
                     style: TextStyle(
                       fontSize: 20,
@@ -245,9 +336,7 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
                     ...studentPayments.map((payment) {
                       final statusColor = payment.isSuccess
                           ? AppColors.success
-                          : payment.status == 'PENDING'
-                              ? AppColors.warning
-                              : AppColors.error;
+                          : AppColors.error;
                       return Card(
                         margin: const EdgeInsets.only(bottom: 12),
                         child: ListTile(

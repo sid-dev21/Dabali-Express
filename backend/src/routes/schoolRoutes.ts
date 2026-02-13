@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import {
+  getPublicSchools,
   getAllSchools,
   getSchoolById,
   createSchool,
@@ -11,6 +12,9 @@ import { requireRole } from '../middlewares/roleCheck';
 import { UserRole } from '../types';
 
 const router = Router();
+
+// Public route for login school dropdown
+router.get('/public', getPublicSchools);
 
 // All routes require authentication
 router.use(authMiddleware);

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   getAttendance,
+  getAttendanceByStudent,
   markAttendance,
 } from '../controllers/attendanceController';
 import { authMiddleware } from '../middlewares/auth';
@@ -11,6 +12,9 @@ const router = Router();
 
 // All routes require authentication
 router.use(authMiddleware);
+
+// Get attendance by student (parent can access only own child)
+router.get('/student/:studentId', getAttendanceByStudent);
 
 // Get attendance records (SCHOOL_ADMIN, CANTEEN_MANAGER)
 router.get('/', requireRole(UserRole.SCHOOL_ADMIN, UserRole.CANTEEN_MANAGER), getAttendance);

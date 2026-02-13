@@ -3,6 +3,27 @@ import School from '../models/School';
 import User from '../models/User';
 import { ApiResponse, CreateSchoolDTO } from '../types';
 
+// Public school directory for login dropdown
+export const getPublicSchools = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const schools = await School.find()
+      .select('_id name city')
+      .sort({ name: 1 })
+      .lean();
+
+    res.json({
+      success: true,
+      data: schools,
+    } as ApiResponse);
+  } catch (error) {
+    console.error('Get public schools error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error retrieving schools directory.',
+    } as ApiResponse);
+  }
+};
+
 // Allows to get all schools with populated admin info
 export const getAllSchools = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -88,6 +109,11 @@ export const createSchool = async (req: Request, res: Response): Promise<void> =
 
     await school.save();
 
+    // Keep user-school link in sync for SCHOOL_ADMIN.
+    if (admin_id) {
+      await User.findByIdAndUpdate(admin_id, { school_id: school._id });
+    }
+
     // Return populated school
     const populatedSchool = await School.findById(school._id)
       .populate('admin_id', 'first_name last_name email');
@@ -111,6 +137,7 @@ export const updateSchool = async (req: Request, res: Response): Promise<void> =
   try {
     const { id } = req.params;
     const updates = req.body;
+    const previousSchool = await School.findById(id).select('admin_id');
 
     // Remove fields that shouldn't be updated
     delete updates._id;
@@ -140,6 +167,16 @@ export const updateSchool = async (req: Request, res: Response): Promise<void> =
         message: 'School not found.'
       } as ApiResponse);
       return;
+    }
+
+    // Keep user-school link in sync if admin assignment changed.
+    if (updates.admin_id) {
+      const newAdminId = updates.admin_id.toString();
+      const oldAdminId = previousSchool?.admin_id?.toString();
+      if (oldAdminId && oldAdminId !== newAdminId) {
+        await User.findByIdAndUpdate(oldAdminId, { $unset: { school_id: '' } });
+      }
+      await User.findByIdAndUpdate(newAdminId, { school_id: id });
     }
 
     res.json({

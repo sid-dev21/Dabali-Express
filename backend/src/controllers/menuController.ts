@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import mongoose from 'mongoose';
 import Menu from '../models/Menu';
 import School from '../models/School';
 import User from '../models/User';
@@ -52,6 +53,14 @@ export const getWeeklyMenus = async (req: Request, res: Response): Promise<void>
       res.status(400).json({
         success: false,
         message: 'School ID is required.'
+      } as ApiResponse);
+      return;
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(schoolId)) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid school ID format.'
       } as ApiResponse);
       return;
     }
@@ -141,6 +150,10 @@ export const createMenu = async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
+    const canPublishDirectly =
+      req.user?.role === 'CANTEEN_MANAGER' || req.user?.role === 'SCHOOL_ADMIN';
+    const menuStatus = canPublishDirectly ? MenuStatus.APPROVED : MenuStatus.PENDING;
+
     // Create menu
     const menu = new Menu({
       school_id,
@@ -149,8 +162,10 @@ export const createMenu = async (req: Request, res: Response): Promise<void> => 
       description,
       items: items || [],
       allergens: allergens || [],
-      status: MenuStatus.PENDING,
-      created_by: req.user?.id
+      status: menuStatus,
+      created_by: req.user?.id,
+      approved_by: canPublishDirectly ? req.user?.id : undefined,
+      approved_at: canPublishDirectly ? new Date() : undefined,
     });
 
     await menu.save();
@@ -162,7 +177,9 @@ export const createMenu = async (req: Request, res: Response): Promise<void> => 
 
     res.status(201).json({
       success: true,
-      message: 'Menu created successfully and pending approval.',
+      message: canPublishDirectly
+        ? 'Menu created and published successfully.'
+        : 'Menu created successfully and pending approval.',
       data: populatedMenu
     } as ApiResponse);
   } catch (error) {

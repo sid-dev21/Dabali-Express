@@ -20,6 +20,9 @@ const schoolAdminOnly = requireRole(UserRole.SCHOOL_ADMIN);
 // Get all users (SUPER_ADMIN only)
 router.get('/', superAdminOnly, userController.getAllUsers);
 
+// Get parents and children overview (SUPER_ADMIN only)
+router.get('/parents-overview', superAdminOnly, userController.getParentsOverview);
+
 // Get user by ID (SUPER_ADMIN only)
 router.get('/:id', superAdminOnly, userController.getUserById);
 
@@ -39,6 +42,9 @@ router.get('/canteen-managers/school/:school_id', schoolAdminOnly, userControlle
 
 // Force password reset for canteen manager (SCHOOL_ADMIN only)
 router.post('/canteen-managers/:id/reset-password', schoolAdminOnly, userController.forcePasswordReset);
+
+// Set fixed password for canteen manager (SCHOOL_ADMIN only)
+router.put('/canteen-managers/:id/password', schoolAdminOnly, userController.setCanteenManagerPassword);
 
 // Delete canteen manager (SCHOOL_ADMIN only)
 router.delete('/canteen-managers/:id', schoolAdminOnly, userController.deleteCanteenManager);

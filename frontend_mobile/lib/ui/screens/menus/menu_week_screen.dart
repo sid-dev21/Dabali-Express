@@ -20,9 +20,12 @@ class _MenuWeekScreenState extends State<MenuWeekScreen> {
     'Vendredi',
   ];
 
+  DateTime _currentWeekStart = DateTime.now();
+
   @override
   void initState() {
     super.initState();
+    _currentWeekStart = _startOfWeek(DateTime.now());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadMenus();
     });
@@ -35,7 +38,10 @@ class _MenuWeekScreenState extends State<MenuWeekScreen> {
     // Charger les menus de la première école trouvée
     if (studentProvider.students.isNotEmpty) {
       final schoolId = studentProvider.students.first.schoolId;
-      await menuProvider.loadWeekMenu(schoolId);
+      await menuProvider.loadWeekMenu(
+        schoolId,
+        startDate: _toIsoDate(_currentWeekStart),
+      );
     }
   }
 
@@ -54,12 +60,26 @@ class _MenuWeekScreenState extends State<MenuWeekScreen> {
     return '${date.day}/${date.month}/${date.year}';
   }
 
+  void _goToPreviousWeek() {
+    setState(() {
+      _currentWeekStart = _currentWeekStart.subtract(const Duration(days: 7));
+    });
+    _loadMenus();
+  }
+
+  void _goToNextWeek() {
+    setState(() {
+      _currentWeekStart = _currentWeekStart.add(const Duration(days: 7));
+    });
+    _loadMenus();
+  }
+
   @override
   Widget build(BuildContext context) {
     final menuProvider = context.watch<MenuProvider>();
     final studentProvider = context.watch<StudentProvider>();
-    final monday = _startOfWeek(DateTime.now());
-    final weekDays = List.generate(5, (index) => monday.add(Duration(days: index)));
+    final weekDays =
+        List.generate(5, (index) => _currentWeekStart.add(Duration(days: index)));
     final menuByDate = {
       for (final menu in menuProvider.menus) menu.date: menu,
     };
@@ -109,9 +129,43 @@ class _MenuWeekScreenState extends State<MenuWeekScreen> {
                           onRefresh: _loadMenus,
                           child: ListView.builder(
                             padding: const EdgeInsets.all(16),
-                            itemCount: weekDays.length,
+                            itemCount: weekDays.length + 1,
                             itemBuilder: (context, index) {
-                              final day = weekDays[index];
+                              if (index == 0) {
+                                return Card(
+                                  margin: const EdgeInsets.only(bottom: 16),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 10,
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        IconButton(
+                                          onPressed: _goToPreviousWeek,
+                                          icon: const Icon(Icons.chevron_left),
+                                          tooltip: 'Semaine précédente',
+                                        ),
+                                        Text(
+                                          '${_formatDate(weekDays.first)} - ${_formatDate(weekDays.last)}',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        IconButton(
+                                          onPressed: _goToNextWeek,
+                                          icon: const Icon(Icons.chevron_right),
+                                          tooltip: 'Semaine suivante',
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              }
+                              final dayIndex = index - 1;
+                              final day = weekDays[dayIndex];
                               final dateKey = _toIsoDate(day);
                               final menu = menuByDate[dateKey];
 
@@ -132,7 +186,7 @@ class _MenuWeekScreenState extends State<MenuWeekScreen> {
                                             MainAxisAlignment.spaceBetween,
                                         children: [
                                           Text(
-                                            _dayNames[index],
+                                            _dayNames[dayIndex],
                                             style: const TextStyle(
                                               fontSize: 20,
                                               fontWeight: FontWeight.bold,

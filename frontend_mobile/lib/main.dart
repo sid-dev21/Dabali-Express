@@ -33,7 +33,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => PaymentProvider()),
       ],
       child: MaterialApp(
-        title: 'Cantine Scolaire',
+        title: 'Dabali Express',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
         home: const AppBootstrap(),

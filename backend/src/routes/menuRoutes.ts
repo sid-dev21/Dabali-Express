@@ -24,20 +24,20 @@ router.get('/', getAllMenus);
 // Get week menu
 router.get('/week/:schoolId', getWeeklyMenus);
 
+// Get pending menus (SCHOOL_ADMIN only - for approval)
+router.get('/pending', requireRole(UserRole.SCHOOL_ADMIN), getPendingMenus);
+
 // Get menu by ID
 router.get('/:id', getMenuById);
 
-// Create menu (CANTEEN_MANAGER only - creates pending menu)
-router.post('/', requireRole(UserRole.CANTEEN_MANAGER), createMenu);
+// Create menu (CANTEEN_MANAGER, SCHOOL_ADMIN)
+router.post('/', requireRole(UserRole.CANTEEN_MANAGER, UserRole.SCHOOL_ADMIN), createMenu);
 
 // Update menu (SCHOOL_ADMIN or CANTEEN_MANAGER)
 router.put('/:id', requireRole(UserRole.SCHOOL_ADMIN, UserRole.CANTEEN_MANAGER), updateMenu);
 
 // Delete menu (SCHOOL_ADMIN or CANTEEN_MANAGER)
 router.delete('/:id', requireRole(UserRole.SCHOOL_ADMIN, UserRole.CANTEEN_MANAGER), deleteMenu);
-
-// Get pending menus (SCHOOL_ADMIN only - for approval)
-router.get('/pending', requireRole(UserRole.SCHOOL_ADMIN), getPendingMenus);
 
 // Approve/reject menu (SCHOOL_ADMIN only)
 router.put('/:id/approve', requireRole(UserRole.SCHOOL_ADMIN), approveMenu);

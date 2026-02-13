@@ -30,13 +30,13 @@ class MenuProvider with ChangeNotifier {
   }
 
   // ===== LOAD WEEK MENU =====
-  Future<void> loadWeekMenu(String schoolId) async {
+  Future<void> loadWeekMenu(String schoolId, {String? startDate}) async {
     _isLoading = true;
     _errorMessage = null;
     _notifySafely();
 
     try {
-      _menus = await _repository.getWeekMenu(schoolId);
+      _menus = await _repository.getWeekMenu(schoolId, startDate: startDate);
       _isLoading = false;
       _notifySafely();
     } catch (e) {

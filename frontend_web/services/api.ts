@@ -1,4 +1,4 @@
-import { User, School, Student, Payment, MenuItem, UserRole } from '../types';
+import { User, School, Student, Payment, MenuItem, UserRole, ParentOverview } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -100,19 +100,32 @@ const mapStudent = (apiStudent: any): Student => {
   const parent = apiStudent.parent_id;
   const parentId = parent ? toId(parent) : apiStudent.parent_id ? toId(apiStudent.parent_id) : undefined;
   const parentPhone = parent?.phone || apiStudent.parentPhone || '';
+  const parentName = parent ? `${parent.first_name || ''} ${parent.last_name || ''}`.trim() : '';
+  const parentEmail = parent?.email || '';
   const schoolId = apiStudent.school_id ? toId(apiStudent.school_id) : '';
   const id = toId(apiStudent);
 
-  const hasActiveSub = !!apiStudent.active_subscription;
+  const activeSub = apiStudent.active_subscription;
+  let subscriptionStatus: Student['subscriptionStatus'] = apiStudent.subscriptionStatus || 'none';
+  if (activeSub?.end_date) {
+    const end = new Date(activeSub.end_date);
+    const now = new Date();
+    const diffDays = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    subscriptionStatus = diffDays <= 7 ? 'warning' : 'active';
+  } else if (activeSub) {
+    subscriptionStatus = 'active';
+  }
   return {
     id,
     firstName: apiStudent.first_name || apiStudent.firstName || '',
     lastName: apiStudent.last_name || apiStudent.lastName || '',
     class: apiStudent.class_name || apiStudent.class || '',
+    parentName,
+    parentEmail,
     parentPhone,
     parentId,
     schoolId,
-    subscriptionStatus: hasActiveSub ? 'active' : (apiStudent.subscriptionStatus || 'none'),
+    subscriptionStatus,
     qrCode: apiStudent.qrCode || `QR_${id}`,
   };
 };
@@ -156,6 +169,29 @@ const mapMenu = (apiMenu: any): MenuItem => {
     calories: apiMenu.calories,
     date: new Date(date).toISOString().split('T')[0],
     mealType: apiMenu.meal_type,
+  };
+};
+
+const mapParentOverview = (apiParent: any): ParentOverview => {
+  const children = (apiParent.children || []).map((child: any) => ({
+    id: child.id || toId(child),
+    firstName: child.first_name || '',
+    lastName: child.last_name || '',
+    className: child.class_name || '',
+    schoolName: child.school?.name || '',
+    schoolCity: child.school?.city || '',
+    subscriptionStatus: child.subscription?.status || 'NONE',
+  }));
+
+  return {
+    id: apiParent.id || toId(apiParent),
+    firstName: apiParent.first_name || '',
+    lastName: apiParent.last_name || '',
+    email: apiParent.email || '',
+    phone: apiParent.phone || '',
+    childrenCount: apiParent.children_count || children.length,
+    activeChildrenCount: apiParent.active_children_count || children.filter((c: any) => c.subscriptionStatus === 'ACTIVE').length,
+    children,
   };
 };
 
@@ -353,7 +389,17 @@ export const studentsApi = {
     }
   },
 
-  createStudent: async (studentData: { firstName: string; lastName: string; class: string; schoolId: string; parentId: string; parentPhone?: string }): Promise<Student | null> => {
+  createStudent: async (studentData: {
+    firstName: string;
+    lastName: string;
+    class: string;
+    schoolId: string;
+    parentId?: string;
+    parentPhone?: string;
+    parentFirstName?: string;
+    parentLastName?: string;
+    parentEmail?: string;
+  }): Promise<Student | null> => {
     try {
       const result: ApiResult<any> = await apiRequest('/students', {
         method: 'POST',
@@ -363,6 +409,10 @@ export const studentsApi = {
           class_name: studentData.class,
           school_id: studentData.schoolId,
           parent_id: studentData.parentId,
+          parent_first_name: studentData.parentFirstName,
+          parent_last_name: studentData.parentLastName,
+          parent_phone: studentData.parentPhone,
+          parent_email: studentData.parentEmail,
         }),
       });
       return result?.data ? mapStudent(result.data) : null;
@@ -467,7 +517,7 @@ export const menuApi = {
       const monday = new Date(today);
       monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
 
-      await Promise.all(menus.map((menu) => {
+      const results = await Promise.all(menus.map((menu) => {
         const dayIndex = dayOrder.indexOf(menu.day);
         const menuDate = new Date(monday);
         if (dayIndex >= 0) {
@@ -482,7 +532,7 @@ export const menuApi = {
         });
       }));
 
-      return true;
+      return results.every((result) => !!result);
     } catch (error) {
       console.error('Save menus error:', error);
       return false;
@@ -525,6 +575,16 @@ export const usersApi = {
       return (result?.data || []).map(mapUser);
     } catch (error) {
       console.error('Get users error:', error);
+      return [];
+    }
+  },
+
+  getParentsOverview: async (): Promise<ParentOverview[]> => {
+    try {
+      const result: ApiResult<any[]> = await apiRequest('/users/parents-overview');
+      return (result?.data || []).map(mapParentOverview);
+    } catch (error) {
+      console.error('Get parents overview error:', error);
       return [];
     }
   },
@@ -595,7 +655,37 @@ export const subscriptionsApi = {
       console.error('Update subscription status error:', error);
       return false;
     }
-  }
+  },
+
+  createSubscription: async (payload: {
+    studentId: string;
+    planType: 'weekly' | 'monthly';
+  }): Promise<{ success: boolean; message?: string }> => {
+    try {
+      const startDate = new Date();
+      const endDate = new Date(startDate);
+      if (payload.planType === 'weekly') {
+        endDate.setDate(endDate.getDate() + 6);
+      } else {
+        endDate.setDate(endDate.getDate() + 29);
+      }
+
+      await apiRequest('/subscriptions', {
+        method: 'POST',
+        body: JSON.stringify({
+          student_id: payload.studentId,
+          start_date: startDate.toISOString().split('T')[0],
+          end_date: endDate.toISOString().split('T')[0],
+          meal_plan: payload.planType === 'weekly' ? 'STANDARD' : 'PREMIUM',
+          price: payload.planType === 'weekly' ? 2500 : 10000,
+        }),
+      });
+      return { success: true };
+    } catch (error: any) {
+      console.error('Create subscription error:', error);
+      return { success: false, message: error?.message || "Impossible de créer l'abonnement." };
+    }
+  },
 };
 
 export const attendanceApi = {

@@ -6,10 +6,13 @@ class MenuRepository {
   final ApiService _apiService = ApiService();
 
   // ===== GET WEEK MENU =====
-  Future<List<MenuModel>> getWeekMenu(String schoolId) async {
+  Future<List<MenuModel>> getWeekMenu(String schoolId, {String? startDate}) async {
     try {
       final response = await _apiService.get(
         ApiConstants.weekMenu(schoolId),
+        queryParameters: {
+          if (startDate != null) 'start_date': startDate,
+        },
       );
 
       if (response.data['success'] == true) {

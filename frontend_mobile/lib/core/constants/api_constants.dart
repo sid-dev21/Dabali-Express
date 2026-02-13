@@ -29,4 +29,5 @@ class ApiConstants {
   
   // Attendance Endpoints
   static const String attendance = '/attendance';
+  static String attendanceByStudent(String studentId) => '/attendance/student/$studentId';
 }

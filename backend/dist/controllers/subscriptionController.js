@@ -74,6 +74,22 @@ const createSubscription = async (req, res) => {
             });
             return;
         }
+        const startDate = new Date(start_date);
+        const endDate = new Date(end_date);
+        if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+            res.status(400).json({
+                success: false,
+                message: 'Invalid start date or end date.'
+            });
+            return;
+        }
+        if (startDate > endDate) {
+            res.status(400).json({
+                success: false,
+                message: 'Start date must be before or equal to end date.'
+            });
+            return;
+        }
         // Check if student exists
         const student = await Student_1.default.findById(student_id);
         if (!student) {
@@ -83,11 +99,25 @@ const createSubscription = async (req, res) => {
             });
             return;
         }
+        // Prevent overlapping subscriptions for the same child.
+        const overlappingSubscription = await Subscription_1.default.findOne({
+            student_id,
+            status: { $ne: 'CANCELLED' },
+            start_date: { $lte: endDate },
+            end_date: { $gte: startDate },
+        });
+        if (overlappingSubscription) {
+            res.status(409).json({
+                success: false,
+                message: 'Un abonnement existe déjà pour cet enfant sur cette période.'
+            });
+            return;
+        }
         // Create subscription
         const subscription = new Subscription_1.default({
             student_id,
-            start_date: new Date(start_date),
-            end_date: new Date(end_date),
+            start_date: startDate,
+            end_date: endDate,
             meal_plan: meal_plan || 'STANDARD',
             price
         });

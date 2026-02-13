@@ -3,10 +3,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getAllUsers = exports.deleteUser = exports.updateUser = exports.getUserById = exports.deleteCanteenManager = exports.forcePasswordReset = exports.getCanteenManagersBySchool = exports.createCanteenManager = void 0;
+exports.getParentsOverview = exports.getAllUsers = exports.deleteUser = exports.updateUser = exports.getUserById = exports.deleteCanteenManager = exports.forcePasswordReset = exports.getCanteenManagersBySchool = exports.createCanteenManager = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const User_1 = __importDefault(require("../models/User"));
 const School_1 = __importDefault(require("../models/School"));
+const Student_1 = __importDefault(require("../models/Student"));
+const Subscription_1 = __importDefault(require("../models/Subscription"));
 const validators_1 = require("../utils/validators");
 // Generate temporary password
 const generateTemporaryPassword = () => {
@@ -342,3 +344,79 @@ const getAllUsers = async (req, res) => {
     }
 };
 exports.getAllUsers = getAllUsers;
+// Get parents overview with children details (SUPER_ADMIN only)
+const getParentsOverview = async (req, res) => {
+    try {
+        const parents = await User_1.default.find({ role: 'PARENT' }).select('-password').lean();
+        const parentIds = parents.map((parent) => parent._id);
+        const students = await Student_1.default.find({ parent_id: { $in: parentIds } })
+            .populate('school_id', 'name city')
+            .lean();
+        const studentIds = students.map((student) => student._id);
+        const subscriptions = await Subscription_1.default.find({ student_id: { $in: studentIds } })
+            .sort({ end_date: -1 })
+            .lean();
+        const latestSubByStudent = new Map();
+        for (const subscription of subscriptions) {
+            const key = subscription.student_id.toString();
+            if (!latestSubByStudent.has(key)) {
+                latestSubByStudent.set(key, subscription);
+            }
+        }
+        const studentsByParent = new Map();
+        for (const student of students) {
+            const parentKey = student.parent_id.toString();
+            if (!studentsByParent.has(parentKey)) {
+                studentsByParent.set(parentKey, []);
+            }
+            const latestSub = latestSubByStudent.get(student._id.toString());
+            const school = student.school_id;
+            const subscriptionStatus = latestSub?.status || 'NONE';
+            studentsByParent.get(parentKey)?.push({
+                id: student._id.toString(),
+                first_name: student.first_name,
+                last_name: student.last_name,
+                class_name: student.class_name,
+                school: school ? {
+                    id: school._id?.toString?.() || '',
+                    name: school.name || '',
+                    city: school.city || '',
+                } : null,
+                subscription: latestSub ? {
+                    id: latestSub._id.toString(),
+                    status: subscriptionStatus,
+                    meal_plan: latestSub.meal_plan,
+                    start_date: latestSub.start_date,
+                    end_date: latestSub.end_date,
+                    price: latestSub.price,
+                } : null,
+            });
+        }
+        const data = parents.map((parent) => {
+            const children = studentsByParent.get(parent._id.toString()) || [];
+            const activeChildren = children.filter((child) => child.subscription?.status === 'ACTIVE').length;
+            return {
+                id: parent._id.toString(),
+                email: parent.email,
+                first_name: parent.first_name,
+                last_name: parent.last_name,
+                phone: parent.phone,
+                children_count: children.length,
+                active_children_count: activeChildren,
+                children,
+            };
+        });
+        res.status(200).json({
+            success: true,
+            data,
+        });
+    }
+    catch (error) {
+        console.error('Get parents overview error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error retrieving parents overview.',
+        });
+    }
+};
+exports.getParentsOverview = getParentsOverview;

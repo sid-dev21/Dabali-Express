@@ -18,6 +18,7 @@ import Schools from './components/Schools';
 import Payments from './components/Payments';
 
 import Users from './components/Users';
+import Parents from './components/Parents';
 
 import Settings from './components/Settings';
 
@@ -121,7 +122,7 @@ const App: React.FC = () => {
 
       const schoolId = currentUser.schoolId;
 
-      const canReadPayments = currentUser.role === UserRole.SCHOOL_ADMIN;
+      const canReadPayments = currentUser.role === UserRole.SCHOOL_ADMIN || currentUser.role === UserRole.CANTEEN_MANAGER;
       const canReadStudents = currentUser.role === UserRole.SCHOOL_ADMIN || currentUser.role === UserRole.CANTEEN_MANAGER;
       const canReadSchools = currentUser.role === UserRole.SUPER_ADMIN;
 
@@ -279,6 +280,7 @@ const App: React.FC = () => {
       case 'payments': return <Payments schoolId={currentUser?.schoolId} initialSearch={globalSearch} />;
 
       case 'users': return <Users initialSearch={globalSearch} />;
+      case 'parents': return <Parents initialSearch={globalSearch} />;
 
       case 'canteen-managers': return <CanteenManagers initialSearch={globalSearch} />;
 

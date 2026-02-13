@@ -15,6 +15,8 @@ const superAdminOnly = (0, roleCheck_1.requireRole)(types_1.UserRole.SUPER_ADMIN
 const schoolAdminOnly = (0, roleCheck_1.requireRole)(types_1.UserRole.SCHOOL_ADMIN);
 // Get all users (SUPER_ADMIN only)
 router.get('/', superAdminOnly, userController.getAllUsers);
+// Get parents and children overview (SUPER_ADMIN only)
+router.get('/parents-overview', superAdminOnly, userController.getParentsOverview);
 // Get user by ID (SUPER_ADMIN only)
 router.get('/:id', superAdminOnly, userController.getUserById);
 // Update user (SUPER_ADMIN only)

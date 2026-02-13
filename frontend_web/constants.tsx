@@ -46,12 +46,13 @@ export const COLORS = {
 export const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} />, roles: [UserRole.SUPER_ADMIN, UserRole.SCHOOL_ADMIN, UserRole.CANTEEN_MANAGER] },
   { id: 'schools', label: 'Écoles', icon: <SchoolIcon size={20} />, roles: [UserRole.SUPER_ADMIN] },
+  { id: 'parents', label: 'Parents', icon: <Users size={20} />, roles: [UserRole.SUPER_ADMIN] },
   { id: 'users', label: 'Utilisateurs', icon: <Users size={20} />, roles: [UserRole.SUPER_ADMIN] },
   { id: 'canteen-managers', label: 'Gestionnaires', icon: <UserPlus size={20} />, roles: [UserRole.SCHOOL_ADMIN] },
   { id: 'students', label: 'Élèves', icon: <UserCircle size={20} />, roles: [UserRole.SCHOOL_ADMIN, UserRole.CANTEEN_MANAGER] },
   { id: 'menus', label: 'Menus', icon: <Utensils size={20} />, roles: [UserRole.SCHOOL_ADMIN, UserRole.CANTEEN_MANAGER] },
   { id: 'subscriptions', label: 'Abonnements', icon: <Calendar size={20} />, roles: [UserRole.SCHOOL_ADMIN, UserRole.CANTEEN_MANAGER] },
-  { id: 'payments', label: 'Paiements', icon: <CreditCard size={20} />, roles: [UserRole.SCHOOL_ADMIN] },
+  { id: 'payments', label: 'Paiements', icon: <CreditCard size={20} />, roles: [UserRole.SCHOOL_ADMIN, UserRole.CANTEEN_MANAGER] },
   { id: 'attendance', label: 'Présences', icon: <CheckCircle size={20} />, roles: [UserRole.CANTEEN_MANAGER, UserRole.SCHOOL_ADMIN] },
   { id: 'settings', label: 'Paramètres', icon: <Settings size={20} />, roles: [UserRole.SUPER_ADMIN, UserRole.SCHOOL_ADMIN, UserRole.CANTEEN_MANAGER] },
 ];

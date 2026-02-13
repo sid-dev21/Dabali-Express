@@ -60,7 +60,10 @@ const Students: React.FC<StudentsProps> = ({ schoolId, initialSearch = '' }) => 
       lastName: formData.get('lastName'),
       class: formData.get('class'),
       parentPhone: formData.get('parentPhone'),
-      schoolId: schoolId || '1',
+      parentFirstName: formData.get('parentFirstName'),
+      parentLastName: formData.get('parentLastName'),
+      parentEmail: formData.get('parentEmail'),
+      schoolId: schoolId || '',
       subscriptionStatus: editingStudent?.subscriptionStatus || 'none',
       qrCode: editingStudent?.qrCode || `QR_${Math.random()}`
     };
@@ -81,7 +84,9 @@ const Students: React.FC<StudentsProps> = ({ schoolId, initialSearch = '' }) => 
   const filteredStudents = students.filter(s => 
     `${s.firstName} ${s.lastName}`.toLowerCase().includes(initialSearch.toLowerCase()) ||
     s.class.toLowerCase().includes(initialSearch.toLowerCase()) ||
-    s.parentPhone.includes(initialSearch)
+    s.parentPhone.includes(initialSearch) ||
+    (s.parentName || '').toLowerCase().includes(initialSearch.toLowerCase()) ||
+    (s.parentEmail || '').toLowerCase().includes(initialSearch.toLowerCase())
   );
 
   return (
@@ -131,7 +136,13 @@ const Students: React.FC<StudentsProps> = ({ schoolId, initialSearch = '' }) => 
                   <td className="px-6 py-4">
                     <span className="font-bold text-slate-600 px-3 py-1 bg-slate-100 rounded-lg">{student.class}</span>
                   </td>
-                  <td className="px-6 py-4 text-slate-600 font-medium">{student.parentPhone}</td>
+                  <td className="px-6 py-4 text-slate-600 font-medium">
+                    <div className="space-y-0.5">
+                      <p className="font-bold text-slate-700">{student.parentName || 'Parent'}</p>
+                      <p className="text-xs text-slate-500">{student.parentPhone || '-'}</p>
+                      {student.parentEmail && <p className="text-xs text-slate-400">{student.parentEmail}</p>}
+                    </div>
+                  </td>
                   <td className="px-6 py-4">
                     <span className={`px-3 py-1 rounded-full text-[10px] font-black border uppercase tracking-wider
                       ${student.subscriptionStatus === 'active' 
@@ -231,7 +242,7 @@ const Students: React.FC<StudentsProps> = ({ schoolId, initialSearch = '' }) => 
           className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200"
           onClick={(e) => e.target === e.currentTarget && setIsModalOpen(false)}
         >
-          <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="bg-white w-full max-w-md max-h-[90vh] rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col">
             <div className={`p-8 flex justify-between items-center text-white ${editingStudent ? 'bg-blue-600' : 'bg-emerald-600'}`}>
               <div>
                 <h3 className="font-black text-2xl">{editingStudent ? 'Modifier' : 'Nouvel'} Élève</h3>
@@ -244,26 +255,59 @@ const Students: React.FC<StudentsProps> = ({ schoolId, initialSearch = '' }) => 
                 <X size={24} />
               </button>
             </div>
-            <form onSubmit={handleSave} className="p-8 space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Prénom</label>
-                  <input name="firstName" defaultValue={editingStudent?.firstName} required className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 font-bold text-slate-700 outline-none transition-all" />
+            <form onSubmit={handleSave} className="flex-1 min-h-0 flex flex-col">
+              <div className="flex-1 overflow-y-auto p-8 space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Prénom</label>
+                    <input name="firstName" defaultValue={editingStudent?.firstName} required className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 font-bold text-slate-700 outline-none transition-all" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nom</label>
+                    <input name="lastName" defaultValue={editingStudent?.lastName} required className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 font-bold text-slate-700 outline-none transition-all" />
+                  </div>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nom</label>
-                  <input name="lastName" defaultValue={editingStudent?.lastName} required className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 font-bold text-slate-700 outline-none transition-all" />
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Classe</label>
+                  <input name="class" defaultValue={editingStudent?.class} required placeholder="ex: CM2, 3ème, Terminale..." className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 font-bold text-slate-700 outline-none transition-all" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Prénom Parent</label>
+                    <input
+                      name="parentFirstName"
+                      defaultValue={editingStudent?.parentName?.split(' ')[0] || ''}
+                      required={!editingStudent}
+                      className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 font-bold text-slate-700 outline-none transition-all"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nom Parent</label>
+                    <input
+                      name="parentLastName"
+                      defaultValue={editingStudent?.parentName?.split(' ').slice(1).join(' ') || ''}
+                      required={!editingStudent}
+                      className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 font-bold text-slate-700 outline-none transition-all"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Email Parent</label>
+                  <input
+                    name="parentEmail"
+                    type="email"
+                    defaultValue={editingStudent?.parentEmail || ''}
+                    placeholder="ex: parent@gmail.com"
+                    className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 font-bold text-slate-700 outline-none transition-all"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Téléphone du Parent</label>
+                  <input name="parentPhone" defaultValue={editingStudent?.parentPhone} required placeholder="ex: 70 00 00 00" className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 font-bold text-slate-700 outline-none transition-all" />
                 </div>
               </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Classe</label>
-                <input name="class" defaultValue={editingStudent?.class} required placeholder="ex: CM2, 3ème, Terminale..." className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 font-bold text-slate-700 outline-none transition-all" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Téléphone du Parent</label>
-                <input name="parentPhone" defaultValue={editingStudent?.parentPhone} required placeholder="ex: 70 00 00 00" className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 font-bold text-slate-700 outline-none transition-all" />
-              </div>
-              <div className="pt-4 flex space-x-3">
+              <div className="p-6 border-t border-slate-100 bg-white">
+                <div className="flex space-x-3">
                 <button 
                   type="button" 
                   onClick={() => setIsModalOpen(false)} 
@@ -278,6 +322,7 @@ const Students: React.FC<StudentsProps> = ({ schoolId, initialSearch = '' }) => 
                   <Check size={20} />
                   <span>Confirmer</span>
                 </button>
+                </div>
               </div>
             </form>
           </div>

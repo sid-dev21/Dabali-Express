@@ -60,15 +60,17 @@ const Dashboard: React.FC<DashboardProps> = ({ searchQuery = '', userRole, schoo
           setPayments([]);
           setAttendanceLogs([]);
         } else {
-          const [studentsData, paymentsData, attendanceData] = await Promise.all([
+          const [studentsData, paymentsData, attendanceData, dashboardData] = await Promise.all([
             studentsApi.getStudents(schoolId),
             paymentsApi.getPayments(schoolId),
             attendanceApi.getAttendance(schoolId),
+            reportsApi.getDashboard(schoolId),
           ]);
           if (cancelled) return;
           setStudents(studentsData);
           setPayments(paymentsData);
           setAttendanceLogs(attendanceData || []);
+          setGlobalStats(dashboardData);
         }
       } catch (error) {
         console.error('Dashboard load error:', error);
@@ -94,7 +96,7 @@ const Dashboard: React.FC<DashboardProps> = ({ searchQuery = '', userRole, schoo
 
   const totalRevenue = isSuperAdmin
     ? (globalStats?.monthlyTotal || 0)
-    : payments.reduce((acc, curr) => acc + curr.amount, 0);
+    : (globalStats?.monthlyTotal ?? payments.reduce((acc, curr) => acc + curr.amount, 0));
 
   const subStatus = [
     { name: 'Actifs', value: activeSubs, color: '#10b981' },
@@ -262,5 +264,4 @@ const Dashboard: React.FC<DashboardProps> = ({ searchQuery = '', userRole, schoo
 };
 
 export default Dashboard;
-
 

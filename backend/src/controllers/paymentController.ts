@@ -2,7 +2,19 @@ import { Request, Response } from 'express';
 import Payment from '../models/Payment';
 import Subscription from '../models/Subscription';
 import User from '../models/User';
+import Student from '../models/Student';
 import { ApiResponse, CreatePaymentDTO } from '../types';
+
+const getScopedSubscriptionIds = async (userId: string) => {
+  const actor = await User.findById(userId).select('school_id role').lean();
+  if (!actor?.school_id) {
+    return [];
+  }
+  const students = await Student.find({ school_id: actor.school_id }).select('_id').lean();
+  const studentIds = students.map((student: any) => student._id);
+  const subscriptions = await Subscription.find({ student_id: { $in: studentIds } }).select('_id').lean();
+  return subscriptions.map((subscription: any) => subscription._id.toString());
+};
 
 //  Allows to get all payments with populated subscription and parent info
 export const getAllPayments = async (req: Request, res: Response): Promise<void> => {
@@ -10,12 +22,24 @@ export const getAllPayments = async (req: Request, res: Response): Promise<void>
     const subscription_id = req.query.subscription_id as string;
     const parent_id = req.query.parent_id as string;
     const status = req.query.status as string;
+    const requesterRole = req.user?.role;
+    const requesterId = req.user?.id;
 
     // Build query
     let query: any = {};
     if (subscription_id) query.subscription_id = subscription_id;
     if (parent_id) query.parent_id = parent_id;
     if (status) query.status = status;
+
+    if ((requesterRole === 'SCHOOL_ADMIN' || requesterRole === 'CANTEEN_MANAGER') && requesterId) {
+      const scopedSubscriptionIds = await getScopedSubscriptionIds(requesterId);
+      if (query.subscription_id) {
+        const inScope = scopedSubscriptionIds.includes(query.subscription_id.toString());
+        query.subscription_id = inScope ? query.subscription_id : null;
+      } else {
+        query.subscription_id = { $in: scopedSubscriptionIds };
+      }
+    }
 
     const payments = await Payment.find(query)
       .populate({
@@ -24,7 +48,7 @@ export const getAllPayments = async (req: Request, res: Response): Promise<void>
         populate: { path: 'student_id', select: 'first_name last_name' },
       })
       .populate('parent_id', 'first_name last_name email')
-      .sort({ created_at: -1 });
+      .sort({ createdAt: -1 });
 
     res.json({
       success: true,
@@ -43,10 +67,23 @@ export const getAllPayments = async (req: Request, res: Response): Promise<void>
 export const getPaymentsBySubscription = async (req: Request, res: Response): Promise<void> => {
   try {
     const { subscriptionId } = req.params;
+    const requesterRole = req.user?.role;
+    const requesterId = req.user?.id;
+
+    if ((requesterRole === 'SCHOOL_ADMIN' || requesterRole === 'CANTEEN_MANAGER') && requesterId) {
+      const scopedSubscriptionIds = await getScopedSubscriptionIds(requesterId);
+      if (!scopedSubscriptionIds.includes(subscriptionId)) {
+        res.status(403).json({
+          success: false,
+          message: 'Access denied to this subscription payments.'
+        } as ApiResponse);
+        return;
+      }
+    }
 
     const payments = await Payment.find({ subscription_id: subscriptionId })
       .populate('parent_id', 'first_name last_name email')
-      .sort({ created_at: -1 });
+      .sort({ createdAt: -1 });
 
     res.json({
       success: true,
@@ -82,6 +119,20 @@ export const getPaymentById = async (req: Request, res: Response): Promise<void>
       return;
     }
 
+    const requesterRole = req.user?.role;
+    const requesterId = req.user?.id;
+    if ((requesterRole === 'SCHOOL_ADMIN' || requesterRole === 'CANTEEN_MANAGER') && requesterId) {
+      const scopedSubscriptionIds = await getScopedSubscriptionIds(requesterId);
+      const subscriptionId = (payment.subscription_id as any)?._id?.toString?.() || payment.subscription_id?.toString?.();
+      if (!subscriptionId || !scopedSubscriptionIds.includes(subscriptionId)) {
+        res.status(403).json({
+          success: false,
+          message: 'Access denied to this payment.'
+        } as ApiResponse);
+        return;
+      }
+    }
+
     res.json({
       success: true,
       data: payment
@@ -115,6 +166,19 @@ export const verifyPayment = async (req: Request, res: Response): Promise<void> 
           message: 'Payment not found.'
         } as ApiResponse);
         return;
+      }
+      const requesterRole = req.user?.role;
+      const requesterId = req.user?.id;
+      if ((requesterRole === 'SCHOOL_ADMIN' || requesterRole === 'CANTEEN_MANAGER') && requesterId) {
+        const scopedSubscriptionIds = await getScopedSubscriptionIds(requesterId);
+        const subscriptionId = (currentPayment.subscription_id as any)?._id?.toString?.() || currentPayment.subscription_id?.toString?.();
+        if (!subscriptionId || !scopedSubscriptionIds.includes(subscriptionId)) {
+          res.status(403).json({
+            success: false,
+            message: 'Access denied to this payment.'
+          } as ApiResponse);
+          return;
+        }
       }
       res.json({
         success: true,

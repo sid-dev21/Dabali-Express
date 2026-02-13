@@ -16,6 +16,12 @@ interface AuthProps {
 
 }
 
+interface SchoolOption {
+  _id: string;
+  name: string;
+  city?: string;
+}
+
 
 
 const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
@@ -34,12 +40,37 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
 
   const [showPassword, setShowPassword] = useState(false);
   const [emailValue, setEmailValue] = useState('');
+  const [schoolValue, setSchoolValue] = useState('');
+  const [schoolOptions, setSchoolOptions] = useState<SchoolOption[]>([]);
 
   
 
   // Réinitialiser l'email au changement de rôle et de mode
   useEffect(() => {
     setEmailValue('');
+    setSchoolValue('');
+    setPassword('');
+    setConfirmPassword('');
+  }, [selectedRole, isLogin]);
+
+  useEffect(() => {
+    const requiresSchool = isLogin && (selectedRole === UserRole.SCHOOL_ADMIN || selectedRole === UserRole.CANTEEN_MANAGER);
+    if (!requiresSchool) return;
+
+    let cancelled = false;
+    const loadSchools = async () => {
+      try {
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/schools/public`);
+        const payload = await response.json();
+        if (!cancelled && response.ok) {
+          setSchoolOptions(payload?.data || []);
+        }
+      } catch (err) {
+        if (!cancelled) setSchoolOptions([]);
+      }
+    };
+    loadSchools();
+    return () => { cancelled = true; };
   }, [selectedRole, isLogin]);
 
   // États pour la validation en temps réel à l'inscription
@@ -120,9 +151,15 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
     const formData = new FormData(e.currentTarget);
     const email = emailValue;
     const pass = formData.get('password') as string;
+    const requiresSchool = isLogin && (selectedRole === UserRole.SCHOOL_ADMIN || selectedRole === UserRole.CANTEEN_MANAGER);
 
     if (!email || !pass) {
       setError('Veuillez remplir tous les champs');
+      setIsLoading(false);
+      return;
+    }
+    if (requiresSchool && !schoolValue.trim()) {
+      setError("Veuillez renseigner l'école.");
       setIsLoading(false);
       return;
     }
@@ -131,7 +168,33 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
       if (isLogin) {
         const result = await authApi.login(email, pass);
         if (result.success && result.data) {
-          onLoginSuccess(result.data);
+          const currentUser = await authApi.getCurrentUser();
+          const authenticatedUser = currentUser || result.data;
+
+          if (selectedRole && authenticatedUser.role !== selectedRole) {
+            authApi.logout();
+            setError(`Ce compte est de type ${authenticatedUser.role}. Veuillez choisir le bon profil.`);
+            setIsLoading(false);
+            return;
+          }
+
+          if (requiresSchool) {
+            if (!authenticatedUser.schoolId) {
+              authApi.logout();
+              setError("Ce compte n'est rattaché à aucune école.");
+              setIsLoading(false);
+              return;
+            }
+
+            if (schoolValue !== authenticatedUser.schoolId) {
+              authApi.logout();
+              setError("Cette école ne correspond pas à celle associée à votre compte.");
+              setIsLoading(false);
+              return;
+            }
+          }
+
+          onLoginSuccess(authenticatedUser);
         } else {
           setError(result.message || `Identifiants incorrects. Verifiez votre email et mot de passe pour le role ${roles.find(r => r.id === selectedRole)?.title}.`);
         }
@@ -414,7 +477,26 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
 
             {(step === 'FORM' || !isLogin) && (
 
-              <form onSubmit={handleSubmit} className="space-y-5 animate-in fade-in duration-300">
+              <form
+                key={`auth-form-${selectedRole || 'none'}-${isLogin ? 'login' : 'register'}`}
+                onSubmit={handleSubmit}
+                autoComplete="off"
+                className="space-y-5 animate-in fade-in duration-300"
+              >
+                <input
+                  type="text"
+                  name="fake_username"
+                  autoComplete="username"
+                  className="hidden"
+                  tabIndex={-1}
+                />
+                <input
+                  type="password"
+                  name="fake_password"
+                  autoComplete="current-password"
+                  className="hidden"
+                  tabIndex={-1}
+                />
 
                 {!isLogin && (
 
@@ -469,7 +551,10 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                       name={`email-${selectedRole?.toLowerCase() || 'default'}`} 
                       type="email" 
                       required 
-                      autoComplete="new-password"
+                      autoComplete={`section-${selectedRole?.toLowerCase() || 'auth'} username`}
+                      data-lpignore="true"
+                      readOnly
+                      onFocus={(e) => e.currentTarget.removeAttribute('readonly')}
                       value={emailValue}
                       onChange={(e) => setEmailValue(e.target.value)}
                       placeholder={selectedRole === UserRole.SUPER_ADMIN ? 'admin@dabali.bf' : 'nom@domaine.bf'}
@@ -479,6 +564,29 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                   </div>
 
                 </div>
+
+                {isLogin && (selectedRole === UserRole.SCHOOL_ADMIN || selectedRole === UserRole.CANTEEN_MANAGER) && (
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">École</label>
+                    <div className="relative">
+                      <School className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                      <select
+                        name="school"
+                        required
+                        value={schoolValue}
+                        onChange={(e) => setSchoolValue(e.target.value)}
+                        className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 font-medium transition-all outline-none"
+                      >
+                        <option value="">Sélectionner une école</option>
+                        {schoolOptions.map((school) => (
+                          <option key={school._id} value={school._id}>
+                            {school.name}{school.city ? ` (${school.city})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
 
 
 
@@ -497,6 +605,14 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                       type={showPassword ? "text" : "password"} 
 
                       required 
+                      autoComplete={
+                        isLogin
+                          ? `section-${selectedRole?.toLowerCase() || 'auth'} current-password`
+                          : `section-${selectedRole?.toLowerCase() || 'auth'} new-password`
+                      }
+                      data-lpignore="true"
+                      readOnly
+                      onFocus={(e) => e.currentTarget.removeAttribute('readonly')}
 
                       value={password}
 
@@ -567,6 +683,10 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                         type={showPassword ? "text" : "password"} 
 
                         required 
+                        autoComplete={`section-${selectedRole?.toLowerCase() || 'auth'} new-password`}
+                        data-lpignore="true"
+                        readOnly
+                        onFocus={(e) => e.currentTarget.removeAttribute('readonly')}
 
                         value={confirmPassword}
 
@@ -659,8 +779,3 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
 
 
 export default Auth;
-
-
-
-
-

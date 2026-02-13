@@ -174,22 +174,16 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
                             decoration: BoxDecoration(
                               color: payment.isSuccess
                                   ? AppColors.success.withOpacity(0.1)
-                                  : payment.status == 'PENDING'
-                                      ? AppColors.warning.withOpacity(0.1)
-                                      : AppColors.error.withOpacity(0.1),
+                                  : AppColors.error.withOpacity(0.1),
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Icon(
                               payment.isSuccess
                                   ? Icons.check_circle
-                                  : payment.status == 'PENDING'
-                                      ? Icons.pending
-                                      : Icons.error,
+                                  : Icons.error,
                               color: payment.isSuccess
                                   ? AppColors.success
-                                  : payment.status == 'PENDING'
-                                      ? AppColors.warning
-                                      : AppColors.error,
+                                  : AppColors.error,
                             ),
                           ),
                           title: Text(
@@ -218,9 +212,7 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
                                 decoration: BoxDecoration(
                                   color: payment.isSuccess
                                       ? AppColors.success.withOpacity(0.1)
-                                      : payment.status == 'PENDING'
-                                          ? AppColors.warning.withOpacity(0.1)
-                                          : AppColors.error.withOpacity(0.1),
+                                      : AppColors.error.withOpacity(0.1),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Text(
@@ -229,9 +221,7 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
                                     fontSize: 12,
                                     color: payment.isSuccess
                                         ? AppColors.success
-                                        : payment.status == 'PENDING'
-                                            ? AppColors.warning
-                                            : AppColors.error,
+                                        : AppColors.error,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),

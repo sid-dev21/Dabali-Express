@@ -199,7 +199,11 @@ export interface CreateStudentDTO {
   last_name: string;
   class_name?: string;
   school_id: string;
-  parent_id: string;
+  parent_id?: string;
+  parent_first_name?: string;
+  parent_last_name?: string;
+  parent_phone?: string;
+  parent_email?: string;
   photo_url?: string;
   allergies?: string[];
 }

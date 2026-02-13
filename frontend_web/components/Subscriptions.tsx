@@ -14,6 +14,8 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ schoolId, initialSearch =
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'warning' | 'expired'>('all');
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const loadData = async () => {
     try {
@@ -41,28 +43,33 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ schoolId, initialSearch =
   const warningCount = students.filter(s => s.subscriptionStatus === 'warning').length;
   const expiredCount = students.filter(s => s.subscriptionStatus === 'expired' || s.subscriptionStatus === 'none').length;
 
-  const handleSaveSubscription = async () => {
+  const handleSaveSubscription = async (planType: 'weekly' | 'monthly') => {
     if (!selectedStudent) return;
-    
+    setActionError(null);
+    setIsSubmitting(true);
     try {
-      // Remplacer par un vrai appel API quand disponible
-      // await studentsApi.updateStudent(selectedStudent.id, updatedStudent);
-      const updatedStudent = {
-        ...selectedStudent,
-        subscriptionStatus: 'active'
-      };
-      console.log('Simulation: Mise à jour abonnement', updatedStudent);
+      const result = await subscriptionsApi.createSubscription({
+        studentId: selectedStudent.id,
+        planType,
+      });
+      if (!result.success) {
+        setActionError(result.message || "Impossible de créer l'abonnement.");
+        return;
+      }
       await loadData();
       setIsModalOpen(false);
       setSelectedStudent(null);
     } catch (error) {
       console.error('Erreur lors de la mise à jour de l\'abonnement:', error);
+      setActionError("Erreur lors de la création de l'abonnement.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleRenew = (planType: 'weekly' | 'monthly') => {
     if (selectedStudent) {
-      handleSaveSubscription();
+      handleSaveSubscription(planType);
     }
   };
 
@@ -230,6 +237,11 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ schoolId, initialSearch =
             </div>
             
             <div className="p-8 space-y-6">
+              {actionError && (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                  {actionError}
+                </div>
+              )}
               <p className="text-sm text-slate-500 font-medium leading-relaxed">
                 Choisissez le forfait de cantine pour l'élève. Le badge sera instantanément réactivé après validation.
               </p>
@@ -237,6 +249,7 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ schoolId, initialSearch =
               <div className="space-y-3">
                 <button 
                   onClick={() => handleRenew('weekly')}
+                  disabled={isSubmitting}
                   className="w-full p-5 border-2 border-slate-100 rounded-3xl flex items-center justify-between group hover:border-emerald-500 hover:bg-emerald-50/30 transition-all text-left"
                 >
                   <div>
@@ -248,6 +261,7 @@ const Subscriptions: React.FC<SubscriptionsProps> = ({ schoolId, initialSearch =
 
                 <button 
                   onClick={() => handleRenew('monthly')}
+                  disabled={isSubmitting}
                   className="w-full p-5 border-2 border-slate-100 rounded-3xl flex items-center justify-between group hover:border-emerald-500 hover:bg-emerald-50/30 transition-all text-left"
                 >
                   <div>

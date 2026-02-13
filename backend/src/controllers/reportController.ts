@@ -23,14 +23,15 @@ export const getDashboardStats = async (
 
     if (school_id) {
       studentQuery.school_id = school_id;
-      // For payments, we need to join through subscriptions
-      const subscriptions = await Subscription.find({ school_id });
-      const subscriptionIds = subscriptions.map(s => s._id);
+      // For payments, we need school students -> subscriptions -> payments
+      const studentsForSchool = await Student.find({ school_id }).select('_id');
+      const studentIdsForSchool = studentsForSchool.map((s) => s._id);
+      const subscriptions = await Subscription.find({ student_id: { $in: studentIdsForSchool } }).select('_id');
+      const subscriptionIds = subscriptions.map((s) => s._id);
       paymentQuery.subscription_id = { $in: subscriptionIds };
       
       // For attendance, we need to join through students
-      const students = await Student.find({ school_id });
-      const studentIds = students.map(s => s._id);
+      const studentIds = studentIdsForSchool;
       attendanceQuery.student_id = { $in: studentIds };
       
       subscriptionQuery.student_id = { $in: studentIds };
@@ -60,10 +61,11 @@ export const getDashboardStats = async (
       // Monthly payments
       Payment.find({
         ...paymentQuery,
-        created_at: {
+        createdAt: {
           $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-          $lte: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0)
-        }
+          $lt: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1)
+        },
+        status: { $in: ['PENDING', 'COMPLETED'] }
       })
     ]);
 
@@ -102,7 +104,7 @@ export const getPaymentReports = async (req: Request, res: Response): Promise<vo
     // Build query
     let query: any = {};
     if (start_date && end_date) {
-      query.created_at = {
+      query.createdAt = {
         $gte: new Date(start_date),
         $lte: new Date(end_date)
       };
@@ -110,8 +112,10 @@ export const getPaymentReports = async (req: Request, res: Response): Promise<vo
 
     // If school_id is provided, we need to get payments through subscriptions
     if (school_id) {
-      const subscriptions = await Subscription.find({ school_id });
-      const subscriptionIds = subscriptions.map(s => s._id);
+      const students = await Student.find({ school_id }).select('_id');
+      const studentIds = students.map((s) => s._id);
+      const subscriptions = await Subscription.find({ student_id: { $in: studentIds } }).select('_id');
+      const subscriptionIds = subscriptions.map((s) => s._id);
       query.subscription_id = { $in: subscriptionIds };
     }
 
@@ -124,7 +128,7 @@ export const getPaymentReports = async (req: Request, res: Response): Promise<vo
         }
       })
       .populate('parent_id', 'first_name last_name email')
-      .sort({ created_at: -1 });
+      .sort({ createdAt: -1 });
 
     res.json({
       success: true,

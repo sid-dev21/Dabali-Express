@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 class AppColors {
   // Couleurs principales
-  static const Color primary = Color(0xFF2E7D32); // Vert
+  static const Color primary = Color(0xFF059669); // Vert web (emerald-600)
   static const Color secondary = Color(0xFFFF9800); // Orange
   
   // Couleurs de statut

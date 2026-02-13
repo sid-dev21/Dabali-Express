@@ -3,7 +3,7 @@ import Attendance from '../models/Attendance';
 import Student from '../models/Student';
 import Menu from '../models/Menu';
 import Notification from '../models/Notification';
-import { ApiResponse, MarkAttendanceDTO, NotificationType } from '../types';
+import { ApiResponse, MarkAttendanceDTO, NotificationType, UserRole } from '../types';
 
 // Allows to get attendance records with optional filters (student, date, school) and populated student and menu info
 export const getAttendance = async (req: Request, res: Response): Promise<void> => {
@@ -144,6 +144,40 @@ export const getAttendanceByStudent = async (req: Request, res: Response): Promi
   try {
     const { studentId } = req.params;
     const { startDate, endDate } = req.query;
+    const currentUser = req.user;
+
+    const student = await Student.findById(studentId).select('parent_id school_id').lean();
+    if (!student) {
+      res.status(404).json({
+        success: false,
+        message: 'Student not found.'
+      } as ApiResponse);
+      return;
+    }
+
+    if (
+      currentUser?.role === UserRole.PARENT &&
+      student.parent_id?.toString() !== currentUser.id
+    ) {
+      res.status(403).json({
+        success: false,
+        message: 'Access denied for this student.'
+      } as ApiResponse);
+      return;
+    }
+
+    if (
+      (currentUser?.role === UserRole.SCHOOL_ADMIN ||
+        currentUser?.role === UserRole.CANTEEN_MANAGER) &&
+      currentUser.school_id &&
+      student.school_id?.toString() !== currentUser.school_id
+    ) {
+      res.status(403).json({
+        success: false,
+        message: 'Access denied for this school.'
+      } as ApiResponse);
+      return;
+    }
 
     let query: any = { student_id: studentId };
 

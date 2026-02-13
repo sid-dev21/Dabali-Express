@@ -17,6 +17,22 @@ const getDefaults = (schoolId: string): MenuItem[] => [
   { id: '5', schoolId, day: 'Vendredi', mealName: '', description: '' },
 ];
 
+const mergeWithWeekDefaults = (schoolId: string, savedMenus: MenuItem[]): MenuItem[] => {
+  const defaults = getDefaults(schoolId);
+  const byDay = new Map(savedMenus.map((menu) => [menu.day, menu]));
+  return defaults.map((fallback) => {
+    const existing = byDay.get(fallback.day);
+    return existing
+      ? {
+          ...fallback,
+          ...existing,
+          schoolId,
+          day: fallback.day,
+        }
+      : fallback;
+  });
+};
+
 const Menus: React.FC<MenusProps> = ({ schoolId, initialSearch = '' }) => {
   const [menus, setMenus] = useState<MenuItem[]>([]);
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
@@ -27,7 +43,7 @@ const Menus: React.FC<MenusProps> = ({ schoolId, initialSearch = '' }) => {
       try {
         const savedMenus = await menuApi.getMenus(schoolId);
         if (savedMenus && savedMenus.length > 0) {
-          setMenus(savedMenus);
+          setMenus(mergeWithWeekDefaults(schoolId, savedMenus));
         } else {
           setMenus(getDefaults(schoolId));
         }
@@ -41,9 +57,24 @@ const Menus: React.FC<MenusProps> = ({ schoolId, initialSearch = '' }) => {
 
   const handleSave = async () => {
     if (!schoolId) return;
+    const missingDays = menus
+      .filter((menu) => !(menu.mealName || '').trim() && !(menu.description || '').trim())
+      .map((menu) => menu.day);
+
+    if (missingDays.length > 0) {
+      setSaveStatus(`Veuillez renseigner les menus pour: ${missingDays.join(', ')}`);
+      setTimeout(() => setSaveStatus(null), 5000);
+      return;
+    }
+
     try {
-      await menuApi.saveMenus(menus, schoolId);
-      setSaveStatus("Planning de la semaine enregistré !");
+      const ok = await menuApi.saveMenus(menus, schoolId);
+      if (!ok) {
+        setSaveStatus("Erreur lors de l'enregistrement complet du planning.");
+        setTimeout(() => setSaveStatus(null), 4000);
+        return;
+      }
+      setSaveStatus("Planning de la semaine enregistré et publié !");
       setTimeout(() => setSaveStatus(null), 3000);
     } catch (error) {
       console.error('Error saving menus:', error);

@@ -8,10 +8,10 @@ const types_1 = require("../types");
 const router = (0, express_1.Router)();
 // All routes require authentication
 router.use(auth_1.authMiddleware);
-// Get all schools (SUPER_ADMIN, SCHOOL_ADMIN)
-router.get('/', (0, roleCheck_1.requireRole)(types_1.UserRole.SUPER_ADMIN, types_1.UserRole.SCHOOL_ADMIN), schoolController_1.getAllSchools);
-// Get school by ID (SUPER_ADMIN, SCHOOL_ADMIN)
-router.get('/:id', (0, roleCheck_1.requireRole)(types_1.UserRole.SUPER_ADMIN, types_1.UserRole.SCHOOL_ADMIN), schoolController_1.getSchoolById);
+// Get all schools (SUPER_ADMIN, SCHOOL_ADMIN, PARENT)
+router.get('/', (0, roleCheck_1.requireRole)(types_1.UserRole.SUPER_ADMIN, types_1.UserRole.SCHOOL_ADMIN, types_1.UserRole.PARENT), schoolController_1.getAllSchools);
+// Get school by ID (SUPER_ADMIN, SCHOOL_ADMIN, PARENT)
+router.get('/:id', (0, roleCheck_1.requireRole)(types_1.UserRole.SUPER_ADMIN, types_1.UserRole.SCHOOL_ADMIN, types_1.UserRole.PARENT), schoolController_1.getSchoolById);
 // Create school (only SUPER_ADMIN)
 router.post('/', (0, roleCheck_1.requireRole)(types_1.UserRole.SUPER_ADMIN), schoolController_1.createSchool);
 // Update school (SUPER_ADMIN or SCHOOL_ADMIN for their own school)
