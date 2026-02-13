@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit, Shield, X, Check, Search, UserPlus, Copy, Mail, MessageSquare, Trash2 } from 'lucide-react';
-import { schoolsApi } from '../services/api';
+import { authApi, schoolsApi } from '../services/api';
 import { UserRole, School } from '../types';
 
 interface CanteenManager {
@@ -38,17 +38,45 @@ const CanteenManagers: React.FC<CanteenManagersProps> = ({ initialSearch = '' })
 
   const loadData = async () => {
     try {
-      const [schoolsData, currentUserData] = await Promise.all([
+      const [schoolsData, freshUser] = await Promise.all([
         schoolsApi.getSchools(),
-        getCurrentUserFromStorage()
+        authApi.getCurrentUser()
       ]);
+      const currentUserData = freshUser || getCurrentUserFromStorage();
       
       setSchools(schoolsData);
-      setCurrentUser(currentUserData);
+      let resolvedUser = currentUserData;
+
+      if (resolvedUser && !resolvedUser.schoolId) {
+        const matchedSchool = schoolsData.find(s =>
+          s.adminId === resolvedUser.id || s.adminId === (resolvedUser as any)._id
+        );
+        if (matchedSchool) {
+          resolvedUser = {
+            ...resolvedUser,
+            schoolId: matchedSchool.id,
+            schoolName: matchedSchool.name
+          };
+          localStorage.setItem('current_user', JSON.stringify(resolvedUser));
+        }
+      }
+
+      if (resolvedUser?.schoolId) {
+        const schoolMatch = schoolsData.find(s => s.id === resolvedUser.schoolId);
+        if (schoolMatch && schoolMatch.name !== resolvedUser.schoolName) {
+          resolvedUser = {
+            ...resolvedUser,
+            schoolName: schoolMatch.name
+          };
+          localStorage.setItem('current_user', JSON.stringify(resolvedUser));
+        }
+      }
+
+      setCurrentUser(resolvedUser);
       
       // Charger les gestionnaires de cantine de l'école du school admin
-      if (currentUserData?.schoolId) {
-        await loadCanteenManagers(currentUserData.schoolId);
+      if (resolvedUser?.schoolId) {
+        await loadCanteenManagers(resolvedUser.schoolId);
       }
     } catch (error) {
       console.error('Erreur lors du chargement des données:', error);
@@ -89,80 +117,104 @@ const CanteenManagers: React.FC<CanteenManagersProps> = ({ initialSearch = '' })
 
   const handleCreateManager = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
+    const formElement = e.currentTarget;
+    if (!(formElement instanceof HTMLFormElement)) {
+      console.error('FormData error: currentTarget is not a form element');
+      alert('Erreur technique: formulaire invalide. Veuillez recharger la page.');
+      return;
+    }
+    const fd = new FormData(formElement);
     
-    // Vérification préliminaire
-    const token = localStorage.getItem('auth_token');
+    // AUDIT COMPLET - ÉTAPE 1: Vérification de base
     console.log('=== AUDIT COMPLET CRÉATION GESTIONNAIRE ===');
-    console.log('1. Token présent:', !!token);
-    console.log('2. Token (premiers 20 chars):', token?.substring(0, 20) + '...');
+    
+    const token = localStorage.getItem('auth_token');
+    const storedUser = localStorage.getItem('current_user');
+    
+    console.log('1. ÉTAT LOCAL STORAGE:');
+    console.log('   - Token présent:', !!token);
+    console.log('   - Token (20 premiers chars):', token?.substring(0, 20) + '...');
+    console.log('   - User stocké:', storedUser);
     
     if (!token) {
       alert('Erreur: Vous n\'êtes pas connecté. Veuillez vous reconnecter.');
       return;
     }
     
-    // Vérification CRUCIALE du schoolId
-    console.log('3. Vérification schoolId:');
-    console.log('   - currentUser.schoolId:', currentUser?.schoolId);
-    console.log('   - currentUser.schoolName:', currentUser?.schoolName);
-    console.log('   - currentUser complet:', currentUser);
+    // AUDIT COMPLET - ÉTAPE 2: Rafraîchir l'utilisateur via /auth/me
+    console.log('2. APPEL DIRECT À /auth/me:');
+    const freshUser = await authApi.getCurrentUser();
+    if (freshUser) {
+      console.log('   - ✅ Mise à jour du currentUser avec schoolId');
+      setCurrentUser(freshUser);
+    }
     
-    if (!currentUser?.schoolId) {
+    // AUDIT COMPLET - ÉTAPE 3: Vérification du currentUser React
+    const effectiveUser = freshUser || currentUser;
+
+    console.log('3. ÉTAT CURRENTUSER REACT:');
+    console.log('   - effectiveUser.schoolId:', effectiveUser?.schoolId);
+    console.log('   - effectiveUser.schoolName:', effectiveUser?.schoolName);
+    console.log('   - effectiveUser.role:', effectiveUser?.role);
+    console.log('   - effectiveUser complet:', effectiveUser);
+    
+    if (!effectiveUser?.schoolId) {
+      console.log('❌ ERREUR: SchoolId manquant');
       alert('Erreur: Aucune école associée à votre compte. Veuillez vous reconnecter.');
-      // Forcer la reconnexion
-      localStorage.removeItem('auth_token');
-      localStorage.removeItem('current_user');
-      window.location.reload();
       return;
     }
     
-    const fd = new FormData(e.currentTarget);
+    // AUDIT COMPLET - ÉTAPE 4: Traitement du formulaire
+    console.log('4. TRAITEMENT DU FORMULAIRE:');
     
     const managerData = {
-      first_name: fd.get('firstName') as string,
-      last_name: fd.get('lastName') as string,
-      email: fd.get('email') as string,
-      phone: fd.get('phone') as string,
-      school_id: fd.get('schoolId') as string,
+      first_name: ((fd.get('firstName') as string) || '').trim(),
+      last_name: ((fd.get('lastName') as string) || '').trim(),
+      email: ((fd.get('email') as string) || '').trim().toLowerCase(),
+      phone: ((fd.get('phone') as string) || '').trim(),
+      school_id: (fd.get('schoolId') as string) || effectiveUser?.schoolId || '',
     };
 
-    console.log('4. Données du formulaire:');
-    console.log('   - Prénom:', managerData.first_name);
-    console.log('   - Nom:', managerData.last_name);
-    console.log('   - Email:', managerData.email);
-    console.log('   - Téléphone:', managerData.phone);
-    console.log('   - School ID du formulaire:', managerData.school_id);
-    console.log('   - School ID du currentUser:', currentUser?.schoolId);
+    console.log('   - Données brutes du formulaire:');
+    fd.forEach((value, key) => console.log(`     ${key}: ${value}`));
     
-    console.log('5. Configuration API:');
-    console.log('   - URL:', import.meta.env.VITE_API_URL || 'http://localhost:5000/api');
-    console.log('   - Endpoint complet:', `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/users/canteen-managers`);
+    console.log('   - Données structurées:');
+    console.log('     - Prénom:', managerData.first_name);
+    console.log('     - Nom:', managerData.last_name);
+    console.log('     - Email:', managerData.email);
+    console.log('     - Téléphone:', managerData.phone);
+    console.log('     - School ID du formulaire:', managerData.school_id);
+    console.log('     - School ID du currentUser:', effectiveUser?.schoolId);
     
-    // Validation des données
-    if (!managerData.first_name || !managerData.last_name || !managerData.email || !managerData.school_id) {
-      console.error('❌ Validation échouée:');
-      console.error('   - first_name:', !!managerData.first_name);
-      console.error('   - last_name:', !!managerData.last_name);
-      console.error('   - email:', !!managerData.email);
-      console.error('   - school_id:', !!managerData.school_id);
-      alert('Erreur: Tous les champs obligatoires doivent être remplis.');
+    // AUDIT COMPLET - ÉTAPE 5: Validation
+    console.log('5. VALIDATION:');
+    const validationErrors = [];
+    if (!managerData.first_name) validationErrors.push('first_name manquant');
+    if (!managerData.last_name) validationErrors.push('last_name manquant');
+    if (!managerData.email) validationErrors.push('email manquant');
+    if (!managerData.school_id) validationErrors.push('school_id manquant');
+    const gmailRegex = /^[^\s@]+@gmail\.com$/;
+    if (!gmailRegex.test(managerData.email)) {
+      validationErrors.push('email doit finir par @gmail.com');
+    }
+    
+    if (validationErrors.length > 0) {
+      console.error('❌ Erreurs de validation:', validationErrors);
+      alert(`Erreur de validation: ${validationErrors.join(', ')}`);
       return;
     }
     
-    if (!managerData.email.includes('@')) {
-      alert('Erreur: Email invalide.');
-      return;
-    }
-
-    console.log('6. Validation: ✅ Données valides');
+    console.log('   - ✅ Validation réussie');
     console.log('========================================');
 
+    // AUDIT COMPLET - ÉTAPE 6: Appel API
+    console.log('6. APPEL API CRÉATION:');
     try {
       const apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/users/canteen-managers`;
       
-      console.log('7. Requête HTTP:');
-      console.log('   - Méthode: POST');
       console.log('   - URL:', apiUrl);
+      console.log('   - Méthode: POST');
       console.log('   - Headers:', {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token?.substring(0, 20)}...`
@@ -178,32 +230,31 @@ const CanteenManagers: React.FC<CanteenManagersProps> = ({ initialSearch = '' })
         body: JSON.stringify(managerData),
       });
 
-      console.log('8. Réponse du serveur:');
       console.log('   - Status:', response.status);
       console.log('   - Status Text:', response.statusText);
-      console.log('   - Headers:', Object.fromEntries(response.headers.entries()));
 
       let result;
       try {
         result = await response.json();
         console.log('   - Body JSON:', result);
       } catch (e) {
-        console.log('   - Body pas JSON:', await response.text());
+        const text = await response.text();
+        console.log('   - Body texte:', text);
       }
 
       if (response.ok && result?.success) {
-        console.log('9. Succès: ✅ Gestionnaire créé');
+        console.log('7. ✅ SUCCÈS: Gestionnaire créé');
         setCreatedManager(result.data);
         setIsModalOpen(false);
         await loadCanteenManagers(managerData.school_id);
       } else {
-        console.log('9. Erreur serveur:');
+        console.log('7. ❌ ERREUR SERVEUR:');
         console.log('   - Message:', result?.message || 'Erreur inconnue');
         console.log('   - Success:', result?.success);
         alert(`Erreur: ${result?.message || 'Erreur inconnue'}`);
       }
     } catch (error) {
-      console.log('9. Erreur réseau complète:');
+      console.log('7. ❌ ERREUR RÉSEAU:');
       console.log('   - Type:', (error as Error).constructor.name);
       console.log('   - Message:', (error as Error).message);
       console.log('   - Stack:', (error as Error).stack);
@@ -373,8 +424,20 @@ const CanteenManagers: React.FC<CanteenManagersProps> = ({ initialSearch = '' })
                 </div>
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Email Professionnel</label>
-                <input name="email" type="email" required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500/20 font-medium" placeholder="moussa.traore@school.bf" />
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Email Gmail</label>
+                <input
+                  name="email"
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  required
+                  onInput={(e) => {
+                    const target = e.currentTarget;
+                    target.value = target.value.replace(/\s+/g, '').toLowerCase();
+                  }}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500/20 font-medium"
+                  placeholder="moussa.traore@gmail.com"
+                />
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Téléphone</label>
@@ -386,7 +449,7 @@ const CanteenManagers: React.FC<CanteenManagersProps> = ({ initialSearch = '' })
                 {/* Trouver le nom de l'école à partir du schoolId de l'utilisateur */}
                 {(() => {
                   const userSchool = schools.find(s => s.id === currentUser?.schoolId);
-                  const schoolName = currentUser?.schoolName || userSchool?.name || 'École non trouvée';
+                  const schoolName = userSchool?.name || currentUser?.schoolName || 'École non trouvée';
                   
                   return (
                     <>

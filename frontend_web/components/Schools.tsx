@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { School as SchoolIcon, Plus, MapPin, Trash2, X, Check, Search, Edit2, Users, Info, AlertTriangle } from 'lucide-react';
+import { School as SchoolIcon, Plus, MapPin, Trash2, X, Check, Search, Edit2, Users, Info, AlertTriangle, UserPlus } from 'lucide-react';
 import { schoolsApi, studentsApi, authApi } from '../services/api';
 import { School } from '../types';
 
@@ -43,6 +43,18 @@ const Schools: React.FC<SchoolsProps> = ({ initialSearch = '' }) => {
     setEditingSchool(null);
   };
 
+  const [showCredentials, setShowCredentials] = useState<{email: string, password: string} | null>(null);
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+  };
+
+  const closeCredentialsModal = () => {
+    setShowCredentials(null);
+    closeModal();
+    loadSchools();
+  };
+
   const closeDeleteModal = () => {
     setIsDeleteModalOpen(false);
     setSchoolToDelete(null);
@@ -74,26 +86,111 @@ const Schools: React.FC<SchoolsProps> = ({ initialSearch = '' }) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     
-    const schoolData = {
-      name: formData.get('name') as string,
-      address: formData.get('address') as string,
-      city: formData.get('city') as string,
-      adminName: formData.get('adminName') as string,
-      studentCount: parseInt(formData.get('studentCount') as string) || 0,
-      status: formData.get('status') as 'active' | 'inactive',
-      lastPaymentDate: editingSchool?.lastPaymentDate || new Date().toLocaleDateString()
-    };
-    
     try {
       if (editingSchool) {
+        // Mode modification - utiliser l'ancien système
+        const schoolData = {
+          name: formData.get('schoolName') as string,
+          address: formData.get('schoolAddress') as string,
+          city: formData.get('schoolCity') as string,
+          adminName: formData.get('adminName') as string,
+          studentCount: parseInt(formData.get('count') as string) || 0,
+          status: formData.get('status') as 'active' | 'inactive',
+          lastPaymentDate: editingSchool?.lastPaymentDate || new Date().toLocaleDateString()
+        };
+        
         await schoolsApi.updateSchool(editingSchool.id, schoolData);
+        closeModal();
+        await loadSchools();
       } else {
-        await schoolsApi.createSchool(schoolData);
+        // Mode création - utiliser le nouvel endpoint pour créer School Admin
+        const schoolAdminData = {
+          schoolName: formData.get('schoolName') as string,
+          schoolAddress: formData.get('schoolAddress') as string,
+          schoolCity: formData.get('schoolCity') as string,
+          adminFirstName: formData.get('adminFirstName') as string,
+          adminLastName: formData.get('adminLastName') as string,
+          adminPhone: formData.get('adminPhone') as string || undefined,
+        };
+        
+        console.log('Création School Admin avec données:', schoolAdminData);
+        
+        // Vérification du token
+        const token = localStorage.getItem('auth_token');
+        console.log('Token présent:', !!token);
+        console.log('Token (20 premiers chars):', token?.substring(0, 20));
+        
+        if (!token) {
+          alert('Erreur: Vous n\'êtes pas connecté. Veuillez vous reconnecter.');
+          return;
+        }
+        
+        // Appeler l'endpoint /schools existant avec les données du School Admin
+        const apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/schools`;
+        console.log('URL de l\'API:', apiUrl);
+        
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            name: schoolAdminData.schoolName,
+            address: schoolAdminData.schoolAddress,
+            city: schoolAdminData.schoolCity,
+            // Ajouter les infos du School Admin dans adminName
+            adminName: `${schoolAdminData.adminFirstName} ${schoolAdminData.adminLastName}`,
+            // Marquer que c'est une création avec School Admin
+            createWithAdmin: true,
+            adminFirstName: schoolAdminData.adminFirstName,
+            adminLastName: schoolAdminData.adminLastName,
+            adminPhone: schoolAdminData.adminPhone,
+          }),
+        });
+        
+        console.log('Status de la réponse:', response.status);
+        console.log('Status Text:', response.statusText);
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Erreur HTTP:', response.status, errorText);
+          
+          try {
+            const errorJson = JSON.parse(errorText);
+            alert(`Erreur ${response.status}: ${errorJson.message || 'Erreur inconnue'}`);
+          } catch (e) {
+            alert(`Erreur ${response.status}: ${errorText || 'Erreur réseau'}`);
+          }
+          return;
+        }
+        
+        const result = await response.json();
+        console.log('Réponse succès:', result);
+        
+        if (response.ok && result.success) {
+          console.log('School Admin créé avec succès:', result);
+          
+          // Afficher les identifiants générés dans une modal
+          const credentials = result?.data?.credentials || result?.credentials;
+          if (credentials?.email && credentials?.temporaryPassword) {
+            setShowCredentials({
+              email: credentials.email,
+              password: credentials.temporaryPassword
+            });
+          } else {
+            alert('École créée, mais aucun identifiant admin n\'a été renvoyé par le serveur.');
+            closeModal();
+            await loadSchools();
+          }
+        } else {
+          console.error('Erreur lors de la création:', result);
+          alert(`Erreur: ${result.message || 'Impossible de créer le School Admin'}`);
+        }
       }
-      closeModal();
-      await loadSchools();
     } catch (error) {
-      console.error('Erreur lors de la sauvegarde de l\'école:', error);
+      console.error('Erreur lors de la sauvegarde:', error);
+      alert('Erreur réseau lors de la création. Veuillez réessayer.');
     }
   };
 
@@ -278,7 +375,7 @@ const Schools: React.FC<SchoolsProps> = ({ initialSearch = '' }) => {
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nom Officiel de l'établissement</label>
                 <input 
-                  name="name" 
+                  name="schoolName" 
                   required 
                   defaultValue={editingSchool?.name}
                   placeholder="ex: Lycée Philippe Zinda Kaboré"
@@ -286,34 +383,62 @@ const Schools: React.FC<SchoolsProps> = ({ initialSearch = '' }) => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Ville</label>
-                  <input name="city" required defaultValue={editingSchool?.city} className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 font-bold text-slate-700 outline-none" />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Effectif Total</label>
-                  <input name="count" type="number" required defaultValue={editingSchool?.studentCount} className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 font-bold text-slate-700 outline-none" />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Directeur / Responsable</label>
-                <input name="adminName" required defaultValue={editingSchool?.adminName} className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 font-bold text-slate-700 outline-none" />
-              </div>
-
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Adresse Complète</label>
-                <input name="address" required defaultValue={editingSchool?.address} className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 font-bold text-slate-700 outline-none" />
+                <input name="schoolAddress" required defaultValue={editingSchool?.address} className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 font-bold text-slate-700 outline-none" />
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Statut du Partenariat</label>
-                <select name="status" defaultValue={editingSchool?.status || 'active'} className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 font-bold text-slate-700 outline-none appearance-none">
-                  <option value="active">Opérationnel (Actif)</option>
-                  <option value="inactive">Suspendu (Inactif)</option>
-                </select>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Ville</label>
+                <input name="schoolCity" required defaultValue={editingSchool?.city} className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 font-bold text-slate-700 outline-none" />
               </div>
+
+              {!editingSchool && (
+                <>
+                  <div className="border-t border-slate-200 pt-6">
+                    <h4 className="text-sm font-black text-slate-700 mb-4 flex items-center">
+                      <UserPlus size={16} className="mr-2" />
+                      Informations du School Admin
+                    </h4>
+                    <p className="text-xs text-slate-500 mb-4">
+                      Les identifiants seront générés automatiquement et affichés après la création.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Prénom de l'admin</label>
+                      <input name="adminFirstName" required className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 font-bold text-slate-700 outline-none" placeholder="Jean" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nom de l'admin</label>
+                      <input name="adminLastName" required className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 font-bold text-slate-700 outline-none" placeholder="Traore" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Téléphone (optionnel)</label>
+                    <input name="adminPhone" className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 font-bold text-slate-700 outline-none" placeholder="+22670333333" />
+                  </div>
+                </>
+              )}
+
+              {editingSchool && (
+                <>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Effectif Total</label>
+                    <input name="count" type="number" required defaultValue={editingSchool?.studentCount} className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 font-bold text-slate-700 outline-none" />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Statut du Partenariat</label>
+                    <select name="status" defaultValue={editingSchool?.status || 'active'} className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 font-bold text-slate-700 outline-none appearance-none">
+                      <option value="active">Opérationnel (Actif)</option>
+                      <option value="inactive">Suspendu (Inactif)</option>
+                    </select>
+                  </div>
+                </>
+              )}
 
               <div className="pt-6 flex space-x-4 shrink-0 pb-2">
                 <button 
@@ -328,10 +453,91 @@ const Schools: React.FC<SchoolsProps> = ({ initialSearch = '' }) => {
                   className={`flex-1 px-4 py-4 text-white rounded-2xl font-black shadow-xl transition-all flex items-center justify-center space-x-2 uppercase text-xs tracking-widest ${editingSchool ? 'bg-blue-600 hover:bg-blue-700' : 'bg-emerald-600 hover:bg-emerald-700'}`}
                 >
                   <Check size={18} />
-                  <span>{editingSchool ? 'Enregistrer' : 'Confirmer'}</span>
+                  <span>{editingSchool ? 'Enregistrer' : 'Créer le compte'}</span>
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DES IDENTIFIANTS */}
+      {showCredentials && (
+        <div 
+          className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md animate-in fade-in duration-300"
+          onClick={(e) => e.target === e.currentTarget && closeCredentialsModal()}
+        >
+          <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 border-4 border-emerald-500/10">
+            <div className="p-8 text-center">
+              <div className="mx-auto w-20 h-20 bg-emerald-50 text-emerald-500 rounded-3xl flex items-center justify-center mb-6">
+                <Check size={40} />
+              </div>
+              <h3 className="text-2xl font-black text-slate-800 mb-2">Compte Créé avec Succès !</h3>
+              <p className="text-slate-500 font-medium mb-6">
+                Veuillez sauvegarder ces identifiants et les transmettre au School Admin
+              </p>
+              
+              <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100 text-left mb-8">
+                <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest mb-4 flex items-center">
+                  <Info size={12} className="mr-1" /> Identifiants de Connexion :
+                </p>
+                
+                <div className="space-y-3">
+                  <div className="bg-white p-3 rounded-xl border border-emerald-200">
+                    <p className="text-[9px] font-black text-emerald-700 uppercase mb-1">Email</p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-bold text-slate-800 break-all">{showCredentials.email}</p>
+                      <button 
+                        onClick={() => copyToClipboard(showCredentials.email)}
+                        className="ml-2 p-2 bg-emerald-100 text-emerald-600 rounded-lg hover:bg-emerald-200 transition-colors"
+                        title="Copier l'email"
+                      >
+                        <Check size={14} />
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white p-3 rounded-xl border border-emerald-200">
+                    <p className="text-[9px] font-black text-emerald-700 uppercase mb-1">Mot de passe temporaire</p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-mono font-bold text-slate-800">{showCredentials.password}</p>
+                      <button 
+                        onClick={() => copyToClipboard(showCredentials.password)}
+                        className="ml-2 p-2 bg-emerald-100 text-emerald-600 rounded-lg hover:bg-emerald-200 transition-colors"
+                        title="Copier le mot de passe"
+                      >
+                        <Check size={14} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="mt-4 p-3 bg-amber-50 rounded-xl border border-amber-200">
+                  <p className="text-[9px] font-black text-amber-800 uppercase mb-1">⚠️ Important</p>
+                  <p className="text-xs text-amber-700">
+                    Le School Admin devra changer son mot de passe lors de la première connexion.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-col space-y-3">
+                <button 
+                  onClick={() => {
+                    copyToClipboard(`Email: ${showCredentials.email}\nMot de passe: ${showCredentials.password}`);
+                  }}
+                  className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black shadow-lg shadow-emerald-500/20 hover:bg-emerald-700 transition-all uppercase text-xs tracking-widest flex items-center justify-center space-x-2"
+                >
+                  <Check size={18} />
+                  <span>Copier tout</span>
+                </button>
+                <button 
+                  onClick={closeCredentialsModal}
+                  className="w-full py-4 bg-slate-100 text-slate-500 rounded-2xl font-black hover:bg-slate-200 transition-all uppercase text-xs tracking-widest"
+                >
+                  Fermer
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

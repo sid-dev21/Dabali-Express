@@ -1,12 +1,14 @@
 
-import React, { useState, useEffect } from 'react';
-import { Utensils, Save, CheckCircle } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Utensils, Save, CheckCircle, Trash2, ClipboardCheck } from 'lucide-react';
 import { menuApi } from '../services/api';
-import { MenuItem } from '../types';
+import { MenuItem, UserRole } from '../types';
+import MenuApproval from './MenuApproval';
 
 interface MenusProps {
   schoolId?: string;
   initialSearch?: string;
+  userRole?: UserRole;
 }
 
 const getDefaults = (schoolId: string): MenuItem[] => [
@@ -17,37 +19,65 @@ const getDefaults = (schoolId: string): MenuItem[] => [
   { id: '5', schoolId, day: 'Vendredi', mealName: '', description: '' },
 ];
 
-const Menus: React.FC<MenusProps> = ({ schoolId, initialSearch = '' }) => {
+const Menus: React.FC<MenusProps> = ({ schoolId, initialSearch = '', userRole }) => {
   const [menus, setMenus] = useState<MenuItem[]>([]);
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
+  const [isApprovalOpen, setIsApprovalOpen] = useState(false);
 
-  useEffect(() => {
-    const loadMenus = async () => {
-      if (!schoolId) return;
-      try {
-        const savedMenus = await menuApi.getMenus(schoolId);
-        if (savedMenus && savedMenus.length > 0) {
-          setMenus(savedMenus);
-        } else {
-          setMenus(getDefaults(schoolId));
-        }
-      } catch (error) {
-        console.error('Error loading menus:', error);
+  const loadMenus = useCallback(async () => {
+    if (!schoolId) return;
+    try {
+      const savedMenus = await menuApi.getMenus(schoolId);
+      if (savedMenus && savedMenus.length > 0) {
+        setMenus(savedMenus);
+      } else {
         setMenus(getDefaults(schoolId));
       }
-    };
-    loadMenus();
+    } catch (error) {
+      console.error('Error loading menus:', error);
+      setMenus(getDefaults(schoolId));
+    }
   }, [schoolId]);
+
+  useEffect(() => {
+    loadMenus();
+  }, [loadMenus]);
 
   const handleSave = async () => {
     if (!schoolId) return;
     try {
       await menuApi.saveMenus(menus, schoolId);
+      await loadMenus();
       setSaveStatus("Planning de la semaine enregistré !");
       setTimeout(() => setSaveStatus(null), 3000);
     } catch (error) {
       console.error('Error saving menus:', error);
       setSaveStatus("Erreur lors de l'enregistrement");
+      setTimeout(() => setSaveStatus(null), 3000);
+    }
+  };
+
+  const getMonday = () => {
+    const today = new Date();
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+    monday.setHours(0, 0, 0, 0);
+    return monday.toISOString().split('T')[0];
+  };
+
+  const handleDeleteWeek = async () => {
+    if (!schoolId) return;
+    const confirmed = confirm('Supprimer tous les menus PENDING de la semaine ?');
+    if (!confirmed) return;
+
+    const monday = getMonday();
+    const ok = await menuApi.deleteWeek(schoolId, monday);
+    if (ok) {
+      setMenus(getDefaults(schoolId));
+      setSaveStatus("Menus de la semaine supprimés.");
+      setTimeout(() => setSaveStatus(null), 3000);
+    } else {
+      setSaveStatus("Erreur lors de la suppression");
       setTimeout(() => setSaveStatus(null), 3000);
     }
   };
@@ -65,13 +95,31 @@ const Menus: React.FC<MenusProps> = ({ schoolId, initialSearch = '' }) => {
           <h2 className="text-2xl font-black text-slate-800">Menu de la Semaine</h2>
           <p className="text-sm text-slate-500 font-medium italic">Définissez les plats qui seront servis aux élèves cette semaine.</p>
         </div>
-        <button 
-          onClick={handleSave}
-          className="flex items-center space-x-2 bg-emerald-600 text-white px-8 py-3 rounded-2xl hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-600/20 font-black uppercase text-xs tracking-widest"
-        >
-          <Save size={18} />
-          <span>Enregistrer le Planning</span>
-        </button>
+        <div className="flex flex-wrap gap-3">
+          {userRole === UserRole.SCHOOL_ADMIN && (
+            <button
+              onClick={() => setIsApprovalOpen(true)}
+              className="flex items-center space-x-2 bg-amber-600 text-white px-6 py-3 rounded-2xl hover:bg-amber-700 transition-all shadow-xl shadow-amber-600/20 font-black uppercase text-xs tracking-widest"
+            >
+              <ClipboardCheck size={18} />
+              <span>Valider les Menus</span>
+            </button>
+          )}
+          <button
+            onClick={handleDeleteWeek}
+            className="flex items-center space-x-2 bg-red-600 text-white px-6 py-3 rounded-2xl hover:bg-red-700 transition-all shadow-xl shadow-red-600/20 font-black uppercase text-xs tracking-widest"
+          >
+            <Trash2 size={18} />
+            <span>Supprimer la Semaine</span>
+          </button>
+          <button
+            onClick={handleSave}
+            className="flex items-center space-x-2 bg-emerald-600 text-white px-8 py-3 rounded-2xl hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-600/20 font-black uppercase text-xs tracking-widest"
+          >
+            <Save size={18} />
+            <span>Enregistrer le Planning</span>
+          </button>
+        </div>
       </div>
 
       {saveStatus && (
@@ -111,6 +159,12 @@ const Menus: React.FC<MenusProps> = ({ schoolId, initialSearch = '' }) => {
           </div>
         ))}
       </div>
+
+      <MenuApproval
+        isOpen={isApprovalOpen}
+        onClose={() => setIsApprovalOpen(false)}
+        onMenuApproved={loadMenus}
+      />
     </div>
   );
 };

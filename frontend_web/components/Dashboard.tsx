@@ -47,11 +47,19 @@ const Dashboard: React.FC<DashboardProps> = ({ searchQuery = '', userRole, schoo
 
     const loadData = async () => {
       try {
-        const [studentsData, paymentsData, attendanceData] = await Promise.all([
+        // Charger les données selon le rôle
+        const promises = [
           studentsApi.getStudents(schoolId),
           paymentsApi.getPayments(schoolId),
-          attendanceApi.getAttendance(schoolId),
-        ]);
+        ];
+        
+        // Ajouter attendance seulement pour les rôles qui y ont accès
+        if (!isSuperAdmin) {
+          promises.push(attendanceApi.getAttendance(schoolId));
+        }
+        
+        const results = await Promise.all(promises);
+        const [studentsData, paymentsData, attendanceData] = results;
 
         if (cancelled) return;
 
@@ -64,7 +72,7 @@ const Dashboard: React.FC<DashboardProps> = ({ searchQuery = '', userRole, schoo
           if (!cancelled) setSchools(schoolsData);
         }
       } catch (error) {
-        console.error('Dashboard load error:', error);
+        console.error('Error loading dashboard data:', error);
       }
     };
 

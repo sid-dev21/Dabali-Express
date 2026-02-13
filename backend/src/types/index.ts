@@ -180,6 +180,7 @@ export interface RegisterDTO {
   first_name: string;
   last_name: string;
   phone?: string;
+  school_id?: string; // Required for SCHOOL_ADMIN role
 }
 
 export interface LoginDTO {

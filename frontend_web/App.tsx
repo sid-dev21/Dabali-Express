@@ -65,6 +65,7 @@ const App: React.FC = () => {
   
 
   const searchRef = useRef<HTMLDivElement>(null);
+  const triedSchoolRefresh = useRef(false);
 
 
 
@@ -80,6 +81,28 @@ const App: React.FC = () => {
 
     loadUser();
   }, [currentUser]); // ✅ Dépendance ajoutée
+
+  // Rafraîchir le currentUser une seule fois si le schoolId est manquant (hors SUPER_ADMIN)
+  useEffect(() => {
+    if (!currentUser) return;
+    if (currentUser.role === UserRole.SUPER_ADMIN) return;
+    if (currentUser.schoolId) return;
+    if (triedSchoolRefresh.current) return;
+
+    triedSchoolRefresh.current = true;
+    const updateUserWithSchool = async () => {
+      try {
+        const freshUser = await authApi.getCurrentUser();
+        if (freshUser && freshUser.schoolId) {
+          setCurrentUser(freshUser);
+        }
+      } catch (error) {
+        console.error('Error updating user with school info:', error);
+      }
+    };
+
+    updateUserWithSchool();
+  }, [currentUser]);
 
 
 
@@ -278,7 +301,7 @@ const App: React.FC = () => {
 
       case 'attendance': return <Attendance {...commonProps} />;
 
-      case 'menus': return <Menus schoolId={currentUser?.schoolId} initialSearch={globalSearch} />;
+      case 'menus': return <Menus schoolId={currentUser?.schoolId} initialSearch={globalSearch} userRole={currentUser?.role} />;
 
       case 'schools': return <Schools initialSearch={globalSearch} />;
 
@@ -302,20 +325,11 @@ const App: React.FC = () => {
 
   if (!currentUser) return <Auth onLoginSuccess={handleLoginSuccess} />;
 
-  // Forcer la mise à jour du currentUser avec schoolId si manquant
-  if (currentUser && !currentUser.schoolId) {
-    const updateUserWithSchool = async () => {
-      try {
-        const freshUser = await authApi.getCurrentUser();
-        if (freshUser && freshUser.schoolId) {
-          setCurrentUser(freshUser);
-        }
-      } catch (error) {
-        console.error('Error updating user with school info:', error);
-      }
-    };
-    updateUserWithSchool();
-  }
+  // DEBUG: Afficher l'état actuel
+  console.log('=== APP STATE DEBUG ===');
+  console.log('currentUser:', currentUser);
+  console.log('isInitialLoad:', isInitialLoad);
+  console.log('========================');
 
 
 

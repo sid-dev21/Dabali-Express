@@ -60,14 +60,19 @@ const mapUser = (apiUser: any): User => {
   const firstName = apiUser.first_name || '';
   const lastName = apiUser.last_name || '';
   const name = `${firstName} ${lastName}`.trim() || apiUser.name || apiUser.email || 'Utilisateur';
+  const schoolId = apiUser.schoolId
+    || apiUser.school_id
+    || apiUser.school?._id
+    || apiUser.school?.id;
+  const schoolName = apiUser.schoolName || apiUser.school?.name;
 
   return {
     id,
     name,
     email: apiUser.email || '',
     role: toUserRole(apiUser.role),
-    schoolId: apiUser.schoolId,
-    schoolName: apiUser.schoolName,
+    schoolId,
+    schoolName,
     avatar: apiUser.avatar || '',
     status: 'active',
     createdAt: apiUser.created_at ? new Date(apiUser.created_at).toISOString() : new Date().toISOString(),
@@ -79,7 +84,7 @@ const mapSchool = (apiSchool: any): School => {
   const adminId = admin ? toId(admin) : apiSchool.admin_id ? toId(apiSchool.admin_id) : undefined;
   const adminName = admin
     ? `${admin.first_name || ''} ${admin.last_name || ''}`.trim()
-    : apiSchool.adminName || '';
+    : apiSchool.adminName || apiSchool.admin_name || '';
 
   return {
     id: toId(apiSchool),
@@ -88,8 +93,8 @@ const mapSchool = (apiSchool: any): School => {
     city: apiSchool.city || '',
     adminId,
     adminName: adminName || 'Non assignÃ©',
-    studentCount: apiSchool.studentCount || 0,
-    status: 'active',
+    studentCount: apiSchool.studentCount || apiSchool.student_count || 0,
+    status: apiSchool.status || 'active',
     lastPaymentDate: apiSchool.lastPaymentDate,
   };
 };
@@ -244,8 +249,9 @@ export const authApi = {
         }),
       });
 
-      if (schoolResult?.data) {
-        const mappedSchool = mapSchool(schoolResult.data);
+      const schoolPayload = schoolResult?.data?.school ?? schoolResult?.data;
+      if (schoolPayload) {
+        const mappedSchool = mapSchool(schoolPayload);
         const enrichedUser = { ...registerResult.data, schoolId: mappedSchool.id, schoolName: mappedSchool.name };
         localStorage.setItem('current_user', JSON.stringify(enrichedUser));
         return { success: true, data: enrichedUser };
@@ -266,8 +272,15 @@ export const authApi = {
       const enrichedUser = await enrichUserWithSchool(user);
       localStorage.setItem('current_user', JSON.stringify(enrichedUser));
       return enrichedUser;
-    } catch (error) {
-      localStorage.removeItem('auth_token');
+    } catch (error: any) {
+      const message = error?.message || '';
+      const shouldClearToken = /token|non autoris|not authenticated|unauthorized/i.test(message);
+
+      if (shouldClearToken) {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('current_user');
+      }
+
       return null;
     }
   },
@@ -304,7 +317,8 @@ export const schoolsApi = {
         method: 'POST',
         body: JSON.stringify(schoolData),
       });
-      return result?.data ? mapSchool(result.data) : null;
+      const schoolPayload = result?.data?.school ?? result?.data;
+      return schoolPayload ? mapSchool(schoolPayload) : null;
     } catch (error) {
       console.error('Create school error:', error);
       return null;
@@ -464,6 +478,16 @@ export const menuApi = {
     }
   },
 
+  deleteWeek: async (schoolId: string, startDate: string): Promise<boolean> => {
+    try {
+      await apiRequest(`/menus/week?school_id=${schoolId}&start_date=${startDate}`, { method: 'DELETE' });
+      return true;
+    } catch (error) {
+      console.error('Delete week menus error:', error);
+      return false;
+    }
+  },
+
   saveMenus: async (menus: MenuItem[], schoolId: string): Promise<boolean> => {
     try {
       const today = new Date();
@@ -477,13 +501,17 @@ export const menuApi = {
         if (dayIndex >= 0) {
           menuDate.setDate(monday.getDate() + dayIndex);
         }
-        return menuApi.createMenu({
+        const payload = {
           schoolId,
           date: menuDate.toISOString().split('T')[0],
-          mealType: 'LUNCH',
+          mealType: menu.mealType || 'LUNCH',
           description: menu.mealName || menu.description || '',
           items: menu.description ? [menu.description] : [],
-        });
+        };
+        const isPersisted = typeof menu.id === 'string' && /^[a-f0-9]{24}$/i.test(menu.id);
+        return isPersisted
+          ? menuApi.updateMenu(menu.id, payload)
+          : menuApi.createMenu(payload);
       }));
 
       return true;

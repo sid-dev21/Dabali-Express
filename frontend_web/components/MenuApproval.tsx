@@ -12,7 +12,7 @@ interface MenuApprovalProps {
 const MenuApproval: React.FC<MenuApprovalProps> = ({ isOpen, onClose, onMenuApproved }) => {
   const [pendingMenus, setPendingMenus] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [processingId, setProcessingId] = useState<number | null>(null);
+  const [processingId, setProcessingId] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [showRejectionDialog, setShowRejectionDialog] = useState(false);
   const [selectedMenu, setSelectedMenu] = useState<MenuItem | null>(null);
@@ -26,8 +26,9 @@ const MenuApproval: React.FC<MenuApprovalProps> = ({ isOpen, onClose, onMenuAppr
   const fetchPendingMenus = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/menus/pending');
-      setPendingMenus(response.data.data || []);
+      const response: any = await api.get('/menus/pending');
+      const payload = response?.data || response;
+      setPendingMenus(payload?.data || payload || []);
     } catch (error) {
       console.error('Error fetching pending menus:', error);
     } finally {
@@ -35,12 +36,12 @@ const MenuApproval: React.FC<MenuApprovalProps> = ({ isOpen, onClose, onMenuAppr
     }
   };
 
-  const handleApprove = async (menuId: number) => {
+  const handleApprove = async (menuId: string) => {
     try {
       setProcessingId(menuId);
       await api.put(`/menus/${menuId}/approve`, { approved: true });
       
-      setPendingMenus(prev => prev.filter(menu => menu.id !== menuId));
+      setPendingMenus(prev => prev.filter(menu => String(menu.id) !== String(menuId)));
       onMenuApproved();
       
       // Show success message
@@ -60,13 +61,13 @@ const MenuApproval: React.FC<MenuApprovalProps> = ({ isOpen, onClose, onMenuAppr
     }
 
     try {
-      setProcessingId(selectedMenu.id);
+      setProcessingId(String(selectedMenu.id));
       await api.put(`/menus/${selectedMenu.id}/approve`, { 
         approved: false, 
         rejection_reason: rejectionReason 
       });
       
-      setPendingMenus(prev => prev.filter(menu => menu.id !== selectedMenu.id));
+      setPendingMenus(prev => prev.filter(menu => String(menu.id) !== String(selectedMenu.id)));
       onMenuApproved();
       
       // Close dialog and reset

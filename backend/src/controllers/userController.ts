@@ -22,9 +22,24 @@ export const createCanteenManager = async (req: Request, res: Response): Promise
     const { first_name, last_name, email, phone, school_id } = req.body;
     // Type assertion pour éviter l'erreur TypeScript
     const schoolAdmin = req.user as any; // Assuming auth middleware adds user to req
+    const schoolAdminId = schoolAdmin?.id || schoolAdmin?._id;
+    const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+    console.log('[CANTEEN_MANAGER_CREATE] Start', {
+      schoolAdminId: schoolAdminId?.toString?.() || schoolAdminId,
+      email,
+      normalizedEmail,
+      school_id,
+    });
 
     // Validate required fields
     if (!first_name || !last_name || !email || !school_id) {
+      console.warn('[CANTEEN_MANAGER_CREATE] Missing required fields', {
+        first_name: !!first_name,
+        last_name: !!last_name,
+        email: !!email,
+        school_id: !!school_id,
+        schoolAdminId: schoolAdminId?.toString?.() || schoolAdminId,
+      });
       res.status(400).json({
         success: false,
         message: 'Prénom, nom, email et école sont requis.',
@@ -33,7 +48,12 @@ export const createCanteenManager = async (req: Request, res: Response): Promise
     }
 
     // Validate email format (only @gmail.com allowed for canteen managers)
-    if (!isValidGmailEmail(email)) {
+    if (!isValidGmailEmail(normalizedEmail)) {
+      console.warn('[CANTEEN_MANAGER_CREATE] Invalid email domain', {
+        email,
+        normalizedEmail,
+        schoolAdminId: schoolAdminId?.toString?.() || schoolAdminId,
+      });
       res.status(400).json({
         success: false,
         message: 'Seuls les emails se terminant par @gmail.com sont autorisés pour les gestionnaires de cantine.',
@@ -42,8 +62,14 @@ export const createCanteenManager = async (req: Request, res: Response): Promise
     }
 
     // Check if user already exists
-    const existingUser = await User.findOne({ email });
+    const existingUser = await User.findOne({ email: normalizedEmail });
     if (existingUser) {
+      console.warn('[CANTEEN_MANAGER_CREATE] Email already exists', {
+        email,
+        normalizedEmail,
+        existingUserId: existingUser._id?.toString?.() || existingUser._id,
+        schoolAdminId: schoolAdminId?.toString?.() || schoolAdminId,
+      });
       res.status(400).json({
         success: false,
         message: 'Un utilisateur avec cet email existe déjà.',
@@ -54,6 +80,10 @@ export const createCanteenManager = async (req: Request, res: Response): Promise
     // Verify school exists and belongs to admin
     const school = await School.findById(school_id);
     if (!school) {
+      console.warn('[CANTEEN_MANAGER_CREATE] School not found', {
+        school_id,
+        schoolAdminId: schoolAdminId?.toString?.() || schoolAdminId,
+      });
       res.status(404).json({
         success: false,
         message: 'École non trouvée.',
@@ -69,16 +99,22 @@ export const createCanteenManager = async (req: Request, res: Response): Promise
     const canteenManager = new User({
       first_name,
       last_name,
-      email,
+      email: normalizedEmail,
       phone,
       password: hashedPassword,
       role: 'CANTEEN_MANAGER',
       school_id,
       is_temporary_password: true,
-      created_by: schoolAdmin._id
+      created_by: schoolAdminId
     });
 
     await canteenManager.save();
+    console.log('[CANTEEN_MANAGER_CREATE] Success', {
+      canteenManagerId: canteenManager._id?.toString?.() || canteenManager._id,
+      email: canteenManager.email,
+      school_id: school_id?.toString?.() || school_id,
+      schoolAdminId: schoolAdminId?.toString?.() || schoolAdminId,
+    });
 
     // Return credentials (in real app, this should be sent via secure email/SMS)
     res.status(201).json({
@@ -109,7 +145,10 @@ export const createCanteenManager = async (req: Request, res: Response): Promise
     } as ApiResponse);
 
   } catch (error) {
-    console.error('Create canteen manager error:', error);
+    console.error('[CANTEEN_MANAGER_CREATE] Error', {
+      message: (error as Error).message,
+      stack: (error as Error).stack,
+    });
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la création du gestionnaire de cantine.',
@@ -123,10 +162,11 @@ export const getCanteenManagersBySchool = async (req: Request, res: Response): P
     const { school_id } = req.params;
     // Type assertion pour éviter l'erreur TypeScript
     const schoolAdmin = req.user as any;
+    const schoolAdminId = schoolAdmin?.id || schoolAdmin?._id;
 
     // Verify school belongs to admin
     const school = await School.findById(school_id);
-    if (!school || school.admin_id.toString() !== schoolAdmin._id.toString()) {
+    if (!school || school.admin_id.toString() !== schoolAdminId?.toString()) {
       res.status(403).json({
         success: false,
         message: 'Accès non autorisé à cette école.',
@@ -159,6 +199,7 @@ export const forcePasswordReset = async (req: Request, res: Response): Promise<v
     const { id } = req.params;
     // Type assertion pour éviter l'erreur TypeScript
     const schoolAdmin = req.user as any;
+    const schoolAdminId = schoolAdmin?.id || schoolAdmin?._id;
 
     const manager = await User.findById(id);
     if (!manager || manager.role !== 'CANTEEN_MANAGER') {
@@ -171,7 +212,7 @@ export const forcePasswordReset = async (req: Request, res: Response): Promise<v
 
     // Verify manager belongs to admin's school
     const school = await School.findById(manager.school_id);
-    if (!school || school.admin_id.toString() !== schoolAdmin._id.toString()) {
+    if (!school || school.admin_id.toString() !== schoolAdminId?.toString()) {
       res.status(403).json({
         success: false,
         message: 'Accès non autorisé.',
@@ -213,6 +254,7 @@ export const deleteCanteenManager = async (req: Request, res: Response): Promise
     const { id } = req.params;
     // Type assertion pour éviter l'erreur TypeScript
     const schoolAdmin = req.user as any;
+    const schoolAdminId = schoolAdmin?.id || schoolAdmin?._id;
 
     const manager = await User.findById(id);
     if (!manager || manager.role !== 'CANTEEN_MANAGER') {
@@ -225,7 +267,7 @@ export const deleteCanteenManager = async (req: Request, res: Response): Promise
 
     // Verify manager belongs to admin's school
     const school = await School.findById(manager.school_id);
-    if (!school || school.admin_id.toString() !== schoolAdmin._id.toString()) {
+    if (!school || school.admin_id.toString() !== schoolAdminId?.toString()) {
       res.status(403).json({
         success: false,
         message: 'Accès non autorisé.',

@@ -150,18 +150,23 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
           return;
         }
 
-        const schoolName = formData.get('schoolName') as string;
-        const adminName = formData.get('adminName') as string;
-        const city = formData.get('city') as string;
+        // Inscription standard - utilise register normal
+        const registerResult = await authApi.register({
+          email,
+          password: pass,
+          role: selectedRole!,
+          first_name: formData.get('firstName') as string,
+          last_name: formData.get('lastName') as string,
+          phone: formData.get('phone') as string,
+        });
 
-        const registerResult = await authApi.registerSchool({ schoolName, adminName, email, password: pass, city });
         if (!registerResult.success) {
           setError(registerResult.message || "Impossible de creer le compte.");
           setIsLoading(false);
           return;
         }
 
-        setSuccess("Etablissement enregistre ! Vous pouvez maintenant vous connecter avec vos identifiants.");
+        setSuccess("Compte créé avec succès ! Vous pouvez maintenant vous connecter.");
         setIsLogin(true);
         setStep('ROLE');
         setPassword('');
@@ -413,51 +418,21 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
 
 
             {(step === 'FORM' || !isLogin) && (
-
               <form onSubmit={handleSubmit} className="space-y-5 animate-in fade-in duration-300">
-
                 {!isLogin && (
-
                   <div className="grid grid-cols-2 gap-4">
-
                     <div className="space-y-1">
-
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Établissement</label>
-
-                      <input name="schoolName" required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 font-medium outline-none transition-all" />
-
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Prénom</label>
+                      <input name="firstName" required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 font-medium outline-none transition-all" />
                     </div>
-
                     <div className="space-y-1">
-
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Ville</label>
-
-                      <input name="city" required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 font-medium outline-none transition-all" />
-
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nom</label>
+                      <input name="lastName" required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 font-medium outline-none transition-all" />
                     </div>
-
                   </div>
-
                 )}
-
-
-
-                {!isLogin && (
-
-                  <div className="space-y-1">
-
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nom du Responsable</label>
-
-                    <input name="adminName" required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 font-medium outline-none transition-all" />
-
-                  </div>
-
-                )}
-
-
 
                 <div className="space-y-1">
-
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Email Professionnel</label>
 
                   <div className="relative">
@@ -618,30 +593,6 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
 
               </form>
 
-            )}
-
-
-
-            {/* Afficher l'option d'inscription uniquement pour SCHOOL_ADMIN */}
-            {selectedRole === UserRole.SCHOOL_ADMIN && (
-              <div className="mt-12 pt-8 border-t border-slate-100 text-center">
-                <p className="text-slate-500 text-sm font-medium">
-                  {isLogin ? "Nouvel établissement ?" : "Vous avez déjà un compte ?"}
-                  <button 
-                    onClick={() => {
-                      setIsLogin(!isLogin);
-                      setStep('ROLE');
-                      setSelectedRole(null);
-                      setError(null);
-                      setPassword('');
-                      setConfirmPassword('');
-                    }}
-                    className="ml-2 text-emerald-600 font-black uppercase text-xs tracking-widest hover:underline underline-offset-8 transition-all"
-                  >
-                    {isLogin ? "Inscrire mon école" : "Se Connecter"}
-                  </button>
-                </p>
-              </div>
             )}
 
           </div>

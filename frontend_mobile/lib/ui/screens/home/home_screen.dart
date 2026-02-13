@@ -4,10 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/child_provider.dart';
 import '../../../providers/subscription_provider.dart';
-import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../widgets/empty_children_widget.dart';
-import '../children/children_screen.dart';
 import '../menus/menus_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -115,48 +112,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   
                   const SliverToBoxAdapter(child: SizedBox(height: 32)),
                   
-                  // Section Mes Enfants avec design moderne
-                  if (children.isEmpty) ...[
-                    SliverToBoxAdapter(
-                      child: FadeTransition(
-                        opacity: _fadeController,
-                        child: _buildModernSectionHeader(
-                          'Mes enfants',
-                          null,
-                          null,
-                        ),
-                      ),
-                    ),
-                    SliverToBoxAdapter(
-                      child: FadeTransition(
-                        opacity: _fadeController,
-                        child: const EmptyChildrenWidget(),
-                      ),
-                    ),
-                    const SliverToBoxAdapter(child: SizedBox(height: 32)),
-                  ] else ...[
-                    SliverToBoxAdapter(
-                      child: FadeTransition(
-                        opacity: _fadeController,
-                        child: _buildModernSectionHeader(
-                          'Mes enfants',
-                          'Voir tout',
-                          () => Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const ChildrenScreen()),
-                          ),
-                        ),
-                      ),
-                    ),
-                    SliverToBoxAdapter(
-                      child: FadeTransition(
-                        opacity: _fadeController,
-                        child: _buildModernChildrenList(children, subscriptions),
-                      ),
-                    ),
-                    const SliverToBoxAdapter(child: SizedBox(height: 32)),
-                  ],
-                  
                   // Section Menu du Jour
                   SliverToBoxAdapter(
                     child: FadeTransition(
@@ -199,7 +154,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     SliverToBoxAdapter(
                       child: FadeTransition(
                         opacity: _fadeController,
-                        child: _buildModernSectionHeader('Statistiques du mois', null, null),
+                        child: _buildModernSectionHeader('Statistiques', null, null),
                       ),
                     ),
                     SliverToBoxAdapter(
@@ -208,50 +163,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         child: _buildModernStats(),
                       ),
                     ),
-                    const SliverToBoxAdapter(child: SizedBox(height: 120)),
-                  ] else ...[
-                    const SliverToBoxAdapter(child: SizedBox(height: 120)),
+                    const SliverToBoxAdapter(child: SizedBox(height: 32)),
                   ],
                 ],
               ),
       ),
-      bottomNavigationBar: _buildModernBottomNav(),
     );
   }
 
   Widget _buildLoadingState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 60,
-            height: 60,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: CircularProgressIndicator(
-              color: AppColors.primary,
-              strokeWidth: 3,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Chargement...',
-            style: GoogleFonts.inter(
-              color: AppColors.textSecondary,
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
+    return const Center(
+      child: CircularProgressIndicator(
+        color: AppColors.primary,
       ),
     );
   }
 
-  // Header moderne avec design épuré
   Widget _buildModernHeader({
     required String userName,
     required int activeChildren,
@@ -272,62 +199,42 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         ],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.person,
+                  color: Colors.white,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Bonjour, ${userName.split(' ')[0]} 👋',
+                      'Bonjour,',
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        color: Colors.white.withOpacity(0.8),
+                      ),
+                    ),
+                    Text(
+                      userName,
                       style: GoogleFonts.poppins(
                         fontSize: 24,
                         fontWeight: FontWeight.w700,
                         color: Colors.white,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _getGreetingMessage(),
-                      style: GoogleFonts.inter(
-                        fontSize: 16,
-                        color: Colors.white.withOpacity(0.9),
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Stack(
-                  children: [
-                    Center(
-                      child: Icon(
-                        Icons.notifications_outlined,
-                        color: Colors.white,
-                        size: 28,
-                      ),
-                    ),
-                    if (pendingPayments > 0)
-                      Positioned(
-                        right: 8,
-                        top: 8,
-                        child: Container(
-                          width: 12,
-                          height: 12,
-                          decoration: const BoxDecoration(
-                            color: Colors.red,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      ),
                   ],
                 ),
               ),
@@ -337,7 +244,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           Row(
             children: [
               Expanded(
-                child: _buildModernStatCard(
+                child: _buildHeaderStat(
                   'Enfants actifs',
                   activeChildren.toString(),
                   Icons.child_care,
@@ -345,7 +252,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
               const SizedBox(width: 16),
               Expanded(
-                child: _buildModernStatCard(
+                child: _buildHeaderStat(
                   'Paiements en attente',
                   pendingPayments.toString(),
                   Icons.payment,
@@ -358,113 +265,71 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildModernStatCard(String label, String value, IconData icon) {
+  Widget _buildHeaderStat(String label, String value, IconData icon) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.15),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.2),
-          width: 1,
-        ),
       ),
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              icon,
-              color: Colors.white,
-              size: 20,
-            ),
+          Icon(
+            icon,
+            color: Colors.white.withOpacity(0.9),
+            size: 20,
           ),
           const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: Colors.white.withOpacity(0.8),
+                  ),
                 ),
-              ),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.white.withOpacity(0.8),
-                  fontWeight: FontWeight.w400,
+                Text(
+                  value,
+                  style: GoogleFonts.poppins(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  String _getGreetingMessage() {
-    final hour = DateTime.now().hour;
-    if (hour >= 6 && hour < 12) {
-      return "Bonne journée!";
-    } else if (hour >= 12 && hour < 14) {
-      return "Bon appétit 😊";
-    } else if (hour >= 14 && hour < 18) {
-      return "Bonne après-midi!";
-    } else {
-      return "Bonne soirée!";
-    }
-  }
-
-  // Section header moderne
-  Widget _buildModernSectionHeader(String title, String? actionText, VoidCallback? onTap) {
+  Widget _buildModernSectionHeader(String title, String? action, VoidCallback? onAction) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
             title,
-            style: const TextStyle(
+            style: GoogleFonts.poppins(
               fontSize: 22,
               fontWeight: FontWeight.w700,
               color: AppColors.textPrimary,
             ),
           ),
-          if (actionText != null && onTap != null)
+          if (action != null && onAction != null)
             GestureDetector(
-              onTap: onTap,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      actionText,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      Icons.arrow_forward_ios,
-                      size: 12,
-                      color: AppColors.primary,
-                    ),
-                  ],
+              onTap: onAction,
+              child: Text(
+                action,
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.primary,
                 ),
               ),
             ),
@@ -473,201 +338,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  // Liste des enfants moderne
-  Widget _buildModernChildrenList(children, subscriptions) {
-    return SizedBox(
-      height: 240,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.only(left: 20, right: 20),
-        itemCount: children.length,
-        itemBuilder: (context, index) {
-          final child = children[index];
-          final subscription = subscriptions
-              .where((s) => s.childId == child.id)
-              .firstOrNull;
-          
-          return Container(
-            width: 200,
-            margin: const EdgeInsets.only(right: 16),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 16,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Column(
-              children: [
-                // Header avec dégradé moderne
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        AppColors.primary,
-                        AppColors.primary.withOpacity(0.8),
-                      ],
-                    ),
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(20),
-                      topRight: Radius.circular(20),
-                    ),
-                  ),
-                  child: Column(
-                    children: [
-                      Container(
-                        width: 60,
-                        height: 60,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: const Icon(
-                          Icons.child_care,
-                          color: Colors.white,
-                          size: 32,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        child.fullName,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                        textAlign: TextAlign.center,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        child.className,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.white.withOpacity(0.9),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      _buildSubscriptionBadge(subscription),
-                      const SizedBox(height: 12),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          _buildQuickStat(Icons.restaurant_menu, 'Repas', '12'),
-                          _buildQuickStat(Icons.calendar_today, 'Présence', '95%'),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildSubscriptionBadge(subscription) {
-    Color backgroundColor;
-    Color textColor;
-    String text;
-    IconData icon;
-
-    if (subscription == null) {
-      backgroundColor = AppColors.primary.withOpacity(0.1);
-      textColor = AppColors.primary;
-      text = 'Aucun abonnement';
-      icon = Icons.warning_amber_outlined;
-    } else if (subscription.isActive) {
-      backgroundColor = AppColors.primary.withOpacity(0.1);
-      textColor = AppColors.primary;
-      text = 'Abonnement actif';
-      icon = Icons.check_circle;
-    } else if (subscription.isExpired) {
-      backgroundColor = AppColors.primary.withOpacity(0.1);
-      textColor = AppColors.primary;
-      text = 'Abonnement expiré';
-      icon = Icons.cancel;
-    } else {
-      backgroundColor = AppColors.primary.withOpacity(0.1);
-      textColor = AppColors.primary;
-      text = 'En attente';
-      icon = Icons.pending;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: textColor),
-          const SizedBox(width: 6),
-          Text(
-            text,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: textColor,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildQuickStat(IconData icon, String label, String value) {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: AppColors.background,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(icon, size: 16, color: AppColors.textSecondary),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 10,
-            color: AppColors.textSecondary,
-            fontWeight: FontWeight.w400,
-          ),
-        ),
-      ],
-    );
-  }
-
-  // Menu card moderne
   Widget _buildModernMenuCard() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
@@ -677,7 +347,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withOpacity(0.05),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
@@ -689,7 +359,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: AppColors.primary.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
@@ -700,22 +370,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   size: 24,
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'Menu du jour',
-                      style: const TextStyle(
+                      style: GoogleFonts.poppins(
                         fontSize: 18,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                         color: AppColors.textPrimary,
                       ),
                     ),
                     Text(
-                      _formatDate(DateTime.now()),
-                      style: TextStyle(
+                      'Riz aux légumes, poulet grillé',
+                      style: GoogleFonts.inter(
                         fontSize: 14,
                         color: AppColors.textSecondary,
                       ),
@@ -727,47 +397,30 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ),
           const SizedBox(height: 16),
           Container(
+            width: double.infinity,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: AppColors.background,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Riz au gras avec sauce arachide',
-                  style: const TextStyle(
-                    fontSize: 16,
+                  'Accompagnements',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
+                    color: AppColors.textSecondary,
                   ),
                 ),
                 const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 4,
-                  children: [
-                    'Salade verte',
-                    'Banane plantain frite',
-                    'Légumes vapeur',
-                    'Fruit local',
-                    'Yaourt nature'
-                  ].map((item) => Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      item,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  )).toList(),
+                Text(
+                  'Salade verte, banane, orange',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
               ],
             ),
@@ -777,58 +430,79 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  // Actions rapides modernes
   Widget _buildModernQuickActions() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
         children: [
-          Expanded(
-            child: _buildModernActionButton(
-              Icons.payment,
-              'Payer',
-              AppColors.primary,
-              () => _handlePayment(),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _buildModernActionButton(
-              Icons.restaurant_menu,
-              'Menus',
-              AppColors.primary,
-              () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const MenusScreen()),
+          Row(
+            children: [
+              Expanded(
+                child: _buildQuickActionCard(
+                  'Ajouter un enfant',
+                  Icons.add_circle,
+                  AppColors.primary,
+                  () {
+                    // TODO: Naviguer vers l'ajout d'enfant
+                  },
+                ),
               ),
-            ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildQuickActionCard(
+                  'Paiements',
+                  Icons.payment,
+                  AppColors.secondary,
+                  () {
+                    // TODO: Naviguer vers les paiements
+                  },
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _buildModernActionButton(
-              Icons.notifications,
-              'Notifications',
-              AppColors.primary,
-              () => _handleNotifications(),
-            ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _buildQuickActionCard(
+                  'Notifications',
+                  Icons.notifications,
+                  AppColors.warning,
+                  () {
+                    // TODO: Naviguer vers les notifications
+                  },
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildQuickActionCard(
+                  'Paramètres',
+                  Icons.settings,
+                  AppColors.info,
+                  () {
+                    // TODO: Naviguer vers les paramètres
+                  },
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildModernActionButton(IconData icon, String label, Color color, VoidCallback onTap) {
+  Widget _buildQuickActionCard(String title, IconData icon, Color color, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: AppColors.surface,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 16,
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 12,
               offset: const Offset(0, 4),
             ),
           ],
@@ -836,21 +510,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         child: Column(
           children: [
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
                 icon,
                 color: color,
-                size: 28,
+                size: 24,
               ),
             ),
             const SizedBox(height: 12),
             Text(
-              label,
-              style: const TextStyle(
+              title,
+              style: GoogleFonts.poppins(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
                 color: AppColors.textPrimary,
@@ -863,189 +537,98 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  // Statistiques modernes
   Widget _buildModernStats() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
-        children: [
-          Expanded(
-            child: _buildModernStatItem('Repas pris', '45', AppColors.primary),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _buildModernStatItem('Présence', '92%', AppColors.primary),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _buildModernStatItem('Coût', '12 500', AppColors.primary),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildModernStatItem(String label, String value, Color color) {
     return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withOpacity(0.05),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              value,
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: color,
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
           Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              color: AppColors.textSecondary,
-              fontWeight: FontWeight.w500,
+            'Aperçu du mois',
+            style: GoogleFonts.poppins(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
             ),
-            textAlign: TextAlign.center,
           ),
-        ],
-      ),
-    );
-  }
-
-  // Bottom navigation moderne
-  Widget _buildModernBottomNav() {
-    return Container(
-      height: 80,
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 20,
-            offset: const Offset(0, -4),
-          ),
-        ],
-      ),
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
+          const SizedBox(height: 20),
+          Row(
             children: [
-              _buildModernNavItem(Icons.home, 'Accueil', true),
-              _buildModernNavItem(Icons.child_care, 'Enfants', false, onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ChildrenScreen()),
-                );
-              }),
-              _buildModernNavItem(Icons.restaurant_menu, 'Menus', false, onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const MenusScreen()),
-                );
-              }),
-              _buildModernNavItem(Icons.person, 'Profil', false, onTap: () {
-                // TODO: Naviguer vers l'écran de profil
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Text('Profil - Bientôt disponible'),
-                    backgroundColor: AppColors.primary,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                );
-              }),
+              Expanded(
+                child: _buildStatItem(
+                  'Repas pris',
+                  '45',
+                  Icons.restaurant,
+                  AppColors.success,
+                ),
+              ),
+              Expanded(
+                child: _buildStatItem(
+                  'Présence',
+                  '95%',
+                  Icons.check_circle,
+                  AppColors.info,
+                ),
+              ),
+              Expanded(
+                child: _buildStatItem(
+                  'Coût mensuel',
+                  '25 000 FCFA',
+                  Icons.attach_money,
+                  AppColors.warning,
+                ),
+              ),
             ],
           ),
-        ),
+        ],
       ),
     );
   }
 
-  Widget _buildModernNavItem(IconData icon, String label, bool isActive, {VoidCallback? onTap}) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isActive ? AppColors.primary.withOpacity(0.1) : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
+  Widget _buildStatItem(String label, String value, IconData icon, Color color) {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(
+            icon,
+            color: color,
+            size: 24,
+          ),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 24,
-              color: isActive ? AppColors.primary : AppColors.textSecondary,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                color: isActive ? AppColors.primary : AppColors.textSecondary,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-              ),
-            ),
-          ],
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: GoogleFonts.poppins(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
+          ),
         ),
-      ),
-    );
-  }
-
-  String _formatDate(DateTime date) {
-    const days = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
-    const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
-    
-    return '${days[date.weekday - 1]} ${date.day} ${months[date.month - 1]}';
-  }
-
-  void _handlePayment() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Redirection vers les paiements...'),
-        backgroundColor: AppColors.primary,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+        Text(
+          label,
+          style: GoogleFonts.inter(
+            fontSize: 12,
+            color: AppColors.textSecondary,
+          ),
         ),
-      ),
-    );
-  }
-
-  void _handleNotifications() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Aucune nouvelle notification'),
-        backgroundColor: AppColors.primary,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-      ),
+      ],
     );
   }
 }

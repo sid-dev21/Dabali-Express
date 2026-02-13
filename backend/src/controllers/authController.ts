@@ -1,10 +1,40 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import User from '../models/User';
+import School from '../models/School';
 import { hashPassword, comparePassword } from '../utils/hashPassword';
 import { generateToken } from '../utils/generateToken';
 import { isValidEmail, isValidPassword } from '../utils/validators';
 import { ApiResponse, RegisterDTO, LoginDTO, UserRole } from '../types';
+
+const resolveSchoolInfo = async (user: any): Promise<{ schoolId?: string; schoolName: string | null }> => {
+  let schoolId: string | undefined;
+  let schoolName: string | null = null;
+
+  if (user?.school_id) {
+    const schoolRef = (user.school_id as any);
+    const resolvedId = schoolRef?._id || schoolRef;
+    schoolId = resolvedId?.toString?.() || resolvedId?.toString?.();
+    if (schoolRef?.name) {
+      schoolName = schoolRef.name;
+    } else if (schoolId) {
+      const school = await School.findById(schoolId);
+      schoolName = school?.name || null;
+    }
+    return { schoolId, schoolName };
+  }
+
+  if (user?.role === UserRole.SCHOOL_ADMIN) {
+    const school = await School.findOne({ admin_id: user._id });
+    if (school) {
+      schoolId = school._id.toString();
+      schoolName = school.name || null;
+      await User.findByIdAndUpdate(user._id, { school_id: school._id });
+    }
+  }
+
+  return { schoolId, schoolName };
+};
 
 /**
  * POST /api/auth/login
@@ -61,6 +91,8 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       email: user.email,
       role: user.role as UserRole 
     });
+
+    const { schoolId, schoolName } = await resolveSchoolInfo(user);
     
     // Response - Convert ObjectId to string for JSON serialization
     res.json({ 
@@ -71,7 +103,10 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         email: user.email, 
         role: user.role,
         first_name: user.first_name,
-        last_name: user.last_name 
+        last_name: user.last_name,
+        schoolId,
+        schoolName,
+        school_id: schoolId
       } 
     } as ApiResponse);
   } catch (error) {
@@ -92,7 +127,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
  */
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { email, password, role, first_name, last_name, phone }: RegisterDTO = req.body;
+    const { email, password, role, first_name, last_name, phone, school_id }: RegisterDTO = req.body;
 
     // 1. Validation of required fields
     if (!email || !password || !role || !first_name || !last_name) {
@@ -152,31 +187,60 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       }
     }
 
-    // 7. Hash password
+    // 7. For SCHOOL_ADMIN role, validate school_id
+    if (role === UserRole.SCHOOL_ADMIN && !school_id) {
+      res.status(400).json({
+        success: false,
+        message: 'School ID is required for School Admin role.',
+      } as ApiResponse);
+      return;
+    }
+
+    // 8. For SCHOOL_ADMIN role, verify school exists
+    if (role === UserRole.SCHOOL_ADMIN && school_id) {
+      const school = await School.findById(school_id);
+      if (!school) {
+        res.status(404).json({
+          success: false,
+          message: 'School not found.',
+        } as ApiResponse);
+        return;
+      }
+    }
+
+    // 9. Hash password
     const hashedPassword = await hashPassword(password);
 
-    // 8. Create user document
+    // 10. Create user document with school_id for SCHOOL_ADMIN
     const user = new User({
       email,
       password: hashedPassword,
       role,
       first_name,
       last_name,
-      phone
+      phone,
+      school_id: role === UserRole.SCHOOL_ADMIN ? school_id : undefined
     });
 
     await user.save();
 
-    // 9. ✅ Generate JWT token - Convert ObjectId to string
+    // 11. ✅ Generate JWT token - Convert ObjectId to string
     const token = generateToken({
       id: user._id.toString(),  // IMPORTANT: Convert ObjectId to string
       email: user.email,
       role: user.role as UserRole,
     });
 
-    // 10. Return response (without password)
+    // 12. Return response (without password)
     const userObject = user.toObject();
     const { password: _, ...userWithoutPassword } = userObject;
+
+    // Get school name for SCHOOL_ADMIN
+    let schoolName = null;
+    if (role === UserRole.SCHOOL_ADMIN && user.school_id) {
+      const school = await School.findById(user.school_id);
+      schoolName = school?.name || null;
+    }
 
     res.status(201).json({
       success: true,
@@ -184,6 +248,8 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       data: {
         ...userWithoutPassword,
         _id: user._id.toString(), // Ensure _id is converted to string
+        schoolId: user.school_id?.toString(),
+        schoolName: schoolName,
       },
       token,
     } as ApiResponse);
@@ -230,13 +296,15 @@ export const getCurrentUser = async (req: Request, res: Response): Promise<void>
     const userObject = user.toObject();
     const { password: _, ...userWithoutPassword } = userObject;
 
+    const { schoolId, schoolName } = await resolveSchoolInfo(user);
+
     res.status(200).json({
       success: true,
       data: {
         ...userWithoutPassword,
         _id: user._id.toString(), // Ensure _id is converted to string
-        schoolId: user.school_id?._id?.toString() || user.school_id?.toString(),
-        schoolName: user.school_id?.name || null,
+        schoolId,
+        schoolName,
       },
     } as ApiResponse);
   } catch (error) {
@@ -244,6 +312,140 @@ export const getCurrentUser = async (req: Request, res: Response): Promise<void>
     res.status(500).json({
       success: false,
       message: 'Error retrieving profile.',
+    } as ApiResponse);
+  }
+};
+
+/**
+ * POST /api/auth/register-school-admin
+ * Allows SUPER_ADMIN to create a SCHOOL_ADMIN with associated school
+ * Automatically generates email and password if not provided
+ * 
+ * @param req - Request with school and admin data
+ * @param res - Response with created school and admin with credentials
+ */
+export const registerSchoolAdmin = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { 
+      schoolName, 
+      schoolAddress, 
+      schoolCity, 
+      adminFirstName, 
+      adminLastName,
+      adminPhone 
+    } = req.body;
+
+    // 1. Validate required fields
+    if (!schoolName || !adminFirstName || !adminLastName) {
+      res.status(400).json({
+        success: false,
+        message: 'All required fields must be filled (schoolName, adminFirstName, adminLastName).',
+      } as ApiResponse);
+      return;
+    }
+
+    // 2. Generate automatic email if not provided
+    const generateEmail = (firstName: string, lastName: string, schoolName: string): string => {
+      const cleanFirstName = firstName.toLowerCase().replace(/[^a-z]/g, '');
+      const cleanLastName = lastName.toLowerCase().replace(/[^a-z]/g, '');
+      const cleanSchoolName = schoolName.toLowerCase().replace(/[^a-z]/g, '').replace(/\s+/g, '');
+      return `admin.${cleanFirstName}.${cleanLastName}@${cleanSchoolName}.dabali.bf`;
+    };
+
+    const adminEmail = generateEmail(adminFirstName, adminLastName, schoolName);
+
+    // 3. Generate automatic temporary password
+    const generatePassword = (): string => {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+      let password = '';
+      for (let i = 0; i < 12; i++) {
+        password += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return password;
+    };
+
+    const adminPassword = generatePassword();
+
+    // 4. Check if generated email already exists
+    const existingAdmin = await User.findOne({ email: adminEmail });
+    if (existingAdmin) {
+      res.status(409).json({
+        success: false,
+        message: 'Generated email already exists. Please try different names.',
+      } as ApiResponse);
+      return;
+    }
+
+    // 5. Create school first
+    const school = new School({
+      name: schoolName,
+      address: schoolAddress,
+      city: schoolCity,
+    });
+
+    await school.save();
+
+    // 6. Hash admin password
+    const hashedPassword = await hashPassword(adminPassword);
+
+    // 7. Create school admin
+    const admin = new User({
+      email: adminEmail,
+      password: hashedPassword,
+      role: UserRole.SCHOOL_ADMIN,
+      first_name: adminFirstName,
+      last_name: adminLastName,
+      phone: adminPhone || null,
+      school_id: school._id
+    });
+
+    await admin.save();
+
+    // 8. Update school with admin_id
+    school.admin_id = admin._id;
+    await school.save();
+
+    // 9. Generate JWT token for the new admin
+    const token = generateToken({
+      id: admin._id.toString(),
+      email: admin.email,
+      role: admin.role as UserRole,
+    });
+
+    // 10. Return response without passwords but with generated credentials
+    const adminObject = admin.toObject();
+    const { password: _, ...adminWithoutPassword } = adminObject;
+
+    const schoolObject = school.toObject();
+
+    res.status(201).json({
+      success: true,
+      message: 'School and admin created successfully with generated credentials.',
+      data: {
+        school: {
+          ...schoolObject,
+          _id: school._id.toString(),
+          schoolId: school._id.toString(),
+        },
+        admin: {
+          ...adminWithoutPassword,
+          _id: admin._id.toString(),
+          schoolId: admin.school_id?.toString(),
+          schoolName: school.name,
+        },
+        credentials: {
+          email: adminEmail,
+          temporaryPassword: adminPassword,
+          message: 'Please save these credentials and give them to the school admin. The admin should change the password after first login.'
+        },
+        token,
+      },
+    } as ApiResponse);
+  } catch (error) {
+    console.error('Register school admin error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error creating school and admin.',
     } as ApiResponse);
   }
 };
