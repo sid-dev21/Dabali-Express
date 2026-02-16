@@ -17,13 +17,14 @@ class UserModel {
 
   // Créer depuis JSON (réponse API backend)
   factory UserModel.fromJson(Map<String, dynamic> json) {
+    final resolvedId = (json['id'] ?? json['_id'] ?? '').toString();
     return UserModel(
-      id: json['id'],
-      email: json['email'],
-      role: json['role'],
-      firstName: json['first_name'],
-      lastName: json['last_name'],
-      phone: json['phone'],
+      id: resolvedId,
+      email: (json['email'] ?? '').toString(),
+      role: (json['role'] ?? '').toString(),
+      firstName: (json['first_name'] ?? json['firstName'] ?? '').toString(),
+      lastName: (json['last_name'] ?? json['lastName'] ?? '').toString(),
+      phone: json['phone']?.toString(),
     );
   }
 

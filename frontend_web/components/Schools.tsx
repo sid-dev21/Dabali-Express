@@ -19,7 +19,7 @@ const Schools: React.FC<SchoolsProps> = ({ initialSearch = '' }) => {
     try {
       const schoolsData = await schoolsApi.getSchools();
       setSchools(schoolsData);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur lors du chargement des écoles:', error);
       setSchools([]);
     }
@@ -68,11 +68,15 @@ const Schools: React.FC<SchoolsProps> = ({ initialSearch = '' }) => {
   const confirmDelete = async () => {
     if (schoolToDelete) {
       try {
-        await schoolsApi.deleteSchool(schoolToDelete.id);
+        const deleted = await schoolsApi.deleteSchool(schoolToDelete.id);
+        if (!deleted) {
+          alert('Suppression impossible.');
+          return;
+        }
         await loadSchools();
         closeDeleteModal();
-      } catch (error) {
-        console.error('Erreur lors de la suppression de l\'école:', error);
+      } catch (error: any) {
+        alert(error?.message || 'Erreur lors de la suppression de l ecole.');
       }
     }
   };
@@ -99,7 +103,11 @@ const Schools: React.FC<SchoolsProps> = ({ initialSearch = '' }) => {
           lastPaymentDate: editingSchool?.lastPaymentDate || new Date().toLocaleDateString()
         };
         
-        await schoolsApi.updateSchool(editingSchool.id, schoolData);
+        const updated = await schoolsApi.updateSchool(editingSchool.id, schoolData);
+        if (!updated) {
+          alert('Impossible de modifier cette ecole.');
+          return;
+        }
         closeModal();
         await loadSchools();
       } else {
@@ -188,9 +196,9 @@ const Schools: React.FC<SchoolsProps> = ({ initialSearch = '' }) => {
           alert(`Erreur: ${result.message || 'Impossible de créer le School Admin'}`);
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur lors de la sauvegarde:', error);
-      alert('Erreur réseau lors de la création. Veuillez réessayer.');
+      alert(error?.message || 'Erreur reseau lors de la sauvegarde. Veuillez reessayer.');
     }
   };
 
@@ -202,14 +210,14 @@ const Schools: React.FC<SchoolsProps> = ({ initialSearch = '' }) => {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="surface-card p-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h2 className="text-2xl font-black text-slate-800">Écoles Partenaires</h2>
-          <p className="text-sm text-slate-500 font-medium">Gestion du réseau national Dabali Express.</p>
+          <h2 className="section-title">Écoles Partenaires</h2>
+          <p className="text-sm text-slate-500 font-medium mt-1">Gestion du réseau national Dabali Express.</p>
         </div>
         <button 
           onClick={() => { setEditingSchool(null); setIsModalOpen(true); }}
-          className="flex items-center space-x-2 bg-emerald-600 text-white px-5 py-2.5 rounded-xl hover:bg-emerald-700 transition-all shadow-md font-bold text-sm"
+          className="btn-primary flex items-center space-x-2 px-5 py-2.5 font-bold text-sm"
         >
           <Plus size={18} />
           <span>Ajouter un Établissement</span>
@@ -218,7 +226,7 @@ const Schools: React.FC<SchoolsProps> = ({ initialSearch = '' }) => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
         {filteredSchools.length > 0 ? filteredSchools.map((school) => (
-          <div key={school.id} className="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden hover:shadow-xl hover:shadow-emerald-900/5 transition-all group relative">
+          <div key={school.id} className="surface-card overflow-hidden transition-all group relative hover:shadow-lg">
             <div className="p-7">
               <div className="flex justify-between items-start mb-6">
                 <div className={`p-4 rounded-2xl transition-all shadow-inner ${
@@ -231,14 +239,14 @@ const Schools: React.FC<SchoolsProps> = ({ initialSearch = '' }) => {
                 <div className="flex items-center space-x-1">
                   <button 
                     onClick={() => handleEdit(school)}
-                    className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+                    className="action-icon text-slate-500 hover:text-slate-800"
                     title="Modifier"
                   >
                     <Edit2 size={18} />
                   </button>
                   <button 
                     onClick={() => openDeleteModal(school)}
-                    className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                    className="action-icon text-slate-500 hover:text-red-600"
                     title="Supprimer"
                   >
                     <Trash2 size={18} />
@@ -291,7 +299,7 @@ const Schools: React.FC<SchoolsProps> = ({ initialSearch = '' }) => {
             </div>
           </div>
         )) : (
-          <div className="col-span-full py-32 text-center bg-white rounded-[3rem] border border-dashed border-slate-200">
+          <div className="col-span-full py-32 text-center card-muted rounded-[3rem] border-dashed">
              <div className="opacity-20 flex flex-col items-center">
                 <Search size={64} />
                 <p className="mt-4 font-black text-xl uppercase tracking-widest">Aucun établissement trouvé</p>
@@ -312,7 +320,7 @@ const Schools: React.FC<SchoolsProps> = ({ initialSearch = '' }) => {
               <div className="mx-auto w-20 h-20 bg-red-50 text-red-500 rounded-3xl flex items-center justify-center mb-6 animate-bounce">
                 <AlertTriangle size={40} />
               </div>
-              <h3 className="text-2xl font-black text-slate-800 mb-2">Supprimer l'école ?</h3>
+              <h3 className="section-title mb-2">Supprimer l'école ?</h3>
               <p className="text-slate-500 font-medium mb-6">
                 Vous êtes sur le point de supprimer <span className="text-red-600 font-bold">"{schoolToDelete?.name}"</span>. 
                 Cette action est <span className="uppercase font-black text-red-600">irréversible</span>.
@@ -356,7 +364,7 @@ const Schools: React.FC<SchoolsProps> = ({ initialSearch = '' }) => {
           onClick={(e) => e.target === e.currentTarget && closeModal()}
         >
           <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 max-h-[90vh] flex flex-col">
-            <div className={`p-6 flex justify-between items-center text-white shrink-0 ${editingSchool ? 'bg-blue-600' : 'bg-emerald-600'}`}>
+            <div className={`p-6 flex justify-between items-center text-white shrink-0 ${editingSchool ? 'bg-slate-800' : 'bg-emerald-600'}`}>
               <div>
                 <h3 className="font-black text-2xl">{editingSchool ? 'Modifier École' : 'Nouvelle École'}</h3>
                 <p className="text-xs text-white/70 font-bold uppercase tracking-widest mt-1">
@@ -450,7 +458,7 @@ const Schools: React.FC<SchoolsProps> = ({ initialSearch = '' }) => {
                 </button>
                 <button 
                   type="submit" 
-                  className={`flex-1 px-4 py-4 text-white rounded-2xl font-black shadow-xl transition-all flex items-center justify-center space-x-2 uppercase text-xs tracking-widest ${editingSchool ? 'bg-blue-600 hover:bg-blue-700' : 'bg-emerald-600 hover:bg-emerald-700'}`}
+                  className={`flex-1 px-4 py-4 text-white rounded-2xl font-black shadow-xl transition-all flex items-center justify-center space-x-2 uppercase text-xs tracking-widest ${editingSchool ? 'bg-slate-800 hover:bg-slate-900' : 'bg-emerald-600 hover:bg-emerald-700'}`}
                 >
                   <Check size={18} />
                   <span>{editingSchool ? 'Enregistrer' : 'Créer le compte'}</span>
@@ -472,7 +480,7 @@ const Schools: React.FC<SchoolsProps> = ({ initialSearch = '' }) => {
               <div className="mx-auto w-20 h-20 bg-emerald-50 text-emerald-500 rounded-3xl flex items-center justify-center mb-6">
                 <Check size={40} />
               </div>
-              <h3 className="text-2xl font-black text-slate-800 mb-2">Compte Créé avec Succès !</h3>
+              <h3 className="section-title mb-2">Compte Créé avec Succès !</h3>
               <p className="text-slate-500 font-medium mb-6">
                 Veuillez sauvegarder ces identifiants et les transmettre au School Admin
               </p>

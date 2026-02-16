@@ -1,3 +1,5 @@
+import 'package:dio/dio.dart';
+
 import '../services/api_service.dart';
 import '../services/storage_service.dart';
 import '../models/user_model.dart';
@@ -6,6 +8,30 @@ import '../../core/constants/api_constants.dart';
 class AuthRepository {
   final ApiService _apiService = ApiService();
   final StorageService _storageService = StorageService();
+
+  String _extractErrorMessage(dynamic error, String fallback) {
+    if (error is DioException) {
+      final responseData = error.response?.data;
+      if (responseData is Map<String, dynamic>) {
+        final message = responseData['message'];
+        if (message is String && message.isNotEmpty) {
+          return message;
+        }
+      }
+    }
+    return fallback;
+  }
+
+  Future<void> _persistAuthData({
+    String? token,
+    required Map<String, dynamic> userData,
+  }) async {
+    if (token != null && token.isNotEmpty) {
+      await _storageService.saveToken(token);
+    }
+    await _storageService.saveUserId((userData['id'] ?? userData['_id'] ?? '').toString());
+    await _storageService.saveUserEmail((userData['email'] ?? '').toString());
+  }
 
   // ===== LOGIN =====
   Future<Map<String, dynamic>> login(String email, String password) async {
@@ -18,22 +44,12 @@ class AuthRepository {
         },
       );
 
-      print('DEBUG: Response data: ${response.data}'); // Debug temporaire
-
       if (response.data['success'] == true) {
-        // Sauvegarder le token
-        final token = response.data['token'];
-        await _storageService.saveToken(token);
-
-        // Sauvegarder les infos utilisateur
+        final token = (response.data['token'] ?? '').toString();
         final userData = response.data['data'];
-        print('DEBUG: User data: $userData'); // Debug temporaire
-        await _storageService.saveUserId(userData['id']); // Garder comme String
-        await _storageService.saveUserEmail(userData['email']);
+        await _persistAuthData(token: token, userData: userData);
 
-        // Retourner l'utilisateur
         final user = UserModel.fromJson(userData);
-        print('DEBUG: User model created: ${user.email}'); // Debug temporaire
         return {
           'success': true,
           'user': user,
@@ -46,10 +62,9 @@ class AuthRepository {
         'message': response.data['message'] ?? 'Erreur de connexion',
       };
     } catch (e) {
-      print('DEBUG: Exception in login: $e'); // Debug temporaire
       return {
         'success': false,
-        'message': 'Erreur de connexion au serveur',
+        'message': _extractErrorMessage(e, 'Erreur de connexion au serveur'),
       };
     }
   }
@@ -71,7 +86,10 @@ class AuthRepository {
       final response = await _apiService.get(ApiConstants.profile);
 
       if (response.data['success'] == true) {
-        return UserModel.fromJson(response.data['data']);
+        final userData = response.data['data'] as Map<String, dynamic>;
+        final user = UserModel.fromJson(userData);
+        await _persistAuthData(userData: userData);
+        return user;
       }
       return null;
     } catch (e) {
@@ -101,14 +119,9 @@ class AuthRepository {
       );
 
       if (response.data['success'] == true) {
-        // Sauvegarder le token
-        final token = response.data['token'];
-        await _storageService.saveToken(token);
-
-        // Sauvegarder les infos utilisateur
+        final token = (response.data['token'] ?? '').toString();
         final userData = response.data['data'];
-        await _storageService.saveUserId(userData['id']); // Garder comme String
-        await _storageService.saveUserEmail(userData['email']);
+        await _persistAuthData(token: token, userData: userData);
 
         final user = UserModel.fromJson(userData);
         return {
@@ -125,7 +138,49 @@ class AuthRepository {
     } catch (e) {
       return {
         'success': false,
-        'message': 'Erreur de connexion au serveur',
+        'message': _extractErrorMessage(e, 'Erreur de connexion au serveur'),
+      };
+    }
+  }
+
+  // ===== UPDATE EMAIL / PASSWORD =====
+  Future<Map<String, dynamic>> updateCredentials({
+    required String currentPassword,
+    String? newEmail,
+    String? newPassword,
+    String? confirmNewPassword,
+  }) async {
+    try {
+      final response = await _apiService.post(
+        ApiConstants.updateCredentials,
+        data: {
+          'current_password': currentPassword,
+          if (newEmail != null) 'new_email': newEmail,
+          if (newPassword != null) 'new_password': newPassword,
+          if (confirmNewPassword != null) 'confirm_new_password': confirmNewPassword,
+        },
+      );
+
+      if (response.data['success'] == true) {
+        final token = (response.data['token'] ?? '').toString();
+        final userData = response.data['data'] as Map<String, dynamic>;
+        await _persistAuthData(token: token, userData: userData);
+
+        return {
+          'success': true,
+          'message': response.data['message'] ?? 'Identifiants mis a jour',
+          'user': UserModel.fromJson(userData),
+        };
+      }
+
+      return {
+        'success': false,
+        'message': response.data['message'] ?? 'Erreur de mise a jour des identifiants',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': _extractErrorMessage(e, 'Erreur de connexion au serveur'),
       };
     }
   }

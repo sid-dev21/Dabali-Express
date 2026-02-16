@@ -90,6 +90,62 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
+  // ===== UPDATE EMAIL =====
+  Future<bool> updateEmail({
+    required String newEmail,
+    required String currentPassword,
+  }) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    final result = await _authRepository.updateCredentials(
+      currentPassword: currentPassword,
+      newEmail: newEmail,
+    );
+
+    _isLoading = false;
+
+    if (result['success'] == true) {
+      _currentUser = result['user'] as UserModel?;
+      notifyListeners();
+      return true;
+    }
+
+    _errorMessage = result['message']?.toString() ?? 'Erreur lors de la mise a jour de l\'email';
+    notifyListeners();
+    return false;
+  }
+
+  // ===== UPDATE PASSWORD =====
+  Future<bool> updatePassword({
+    required String currentPassword,
+    required String newPassword,
+    required String confirmNewPassword,
+  }) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    final result = await _authRepository.updateCredentials(
+      currentPassword: currentPassword,
+      newPassword: newPassword,
+      confirmNewPassword: confirmNewPassword,
+    );
+
+    _isLoading = false;
+
+    if (result['success'] == true) {
+      _currentUser = result['user'] as UserModel?;
+      notifyListeners();
+      return true;
+    }
+
+    _errorMessage = result['message']?.toString() ?? 'Erreur lors de la mise a jour du mot de passe';
+    notifyListeners();
+    return false;
+  }
+
   // ===== CLEAR ERROR =====
   void clearError() {
     _errorMessage = null;

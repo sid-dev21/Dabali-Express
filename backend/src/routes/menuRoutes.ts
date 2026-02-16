@@ -1,13 +1,12 @@
 import { Router } from 'express';
 import {
+  getTodayMenu,
   getAllMenus,
   getWeeklyMenus,
   getMenuById,
   createMenu,
   updateMenu,
   deleteMenu,
-  getPendingMenus,
-  approveMenu,
 } from '../controllers/menuController';
 import { authMiddleware } from '../middlewares/auth';
 import { requireRole } from '../middlewares/roleCheck';
@@ -18,6 +17,9 @@ const router = Router();
 // All routes require authentication
 router.use(authMiddleware);
 
+// Get today's menu
+router.get('/today', getTodayMenu);
+
 // Get all menus
 router.get('/', getAllMenus);
 
@@ -27,19 +29,13 @@ router.get('/week/:schoolId', getWeeklyMenus);
 // Get menu by ID
 router.get('/:id', getMenuById);
 
-// Create menu (CANTEEN_MANAGER only - creates pending menu)
+// Create menu (CANTEEN_MANAGER only - auto-approved)
 router.post('/', requireRole(UserRole.CANTEEN_MANAGER), createMenu);
 
-// Update menu (SCHOOL_ADMIN or CANTEEN_MANAGER)
-router.put('/:id', requireRole(UserRole.SCHOOL_ADMIN, UserRole.CANTEEN_MANAGER), updateMenu);
+// Update menu (SUPER_ADMIN, SCHOOL_ADMIN, CANTEEN_MANAGER)
+router.put('/:id', requireRole(UserRole.SUPER_ADMIN, UserRole.SCHOOL_ADMIN, UserRole.CANTEEN_MANAGER), updateMenu);
 
-// Delete menu (SCHOOL_ADMIN or CANTEEN_MANAGER)
-router.delete('/:id', requireRole(UserRole.SCHOOL_ADMIN, UserRole.CANTEEN_MANAGER), deleteMenu);
-
-// Get pending menus (SCHOOL_ADMIN only - for approval)
-router.get('/pending', requireRole(UserRole.SCHOOL_ADMIN), getPendingMenus);
-
-// Approve/reject menu (SCHOOL_ADMIN only)
-router.put('/:id/approve', requireRole(UserRole.SCHOOL_ADMIN), approveMenu);
+// Delete menu (SUPER_ADMIN, SCHOOL_ADMIN, CANTEEN_MANAGER)
+router.delete('/:id', requireRole(UserRole.SUPER_ADMIN, UserRole.SCHOOL_ADMIN, UserRole.CANTEEN_MANAGER), deleteMenu);
 
 export default router;

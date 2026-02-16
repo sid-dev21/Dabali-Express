@@ -9,11 +9,49 @@ interface CanteenManager {
   last_name: string;
   email: string;
   phone: string;
-  school_id: string;
-  school_name: string;
+  school_id: string | { _id?: string; id?: string; name?: string };
+  school_name?: string;
   temporary_password?: string;
   created_at: string;
 }
+
+const toStringId = (value: unknown): string => {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'object') {
+    const obj = value as { _id?: unknown; id?: unknown };
+    if (obj._id) return String(obj._id);
+    if (obj.id) return String(obj.id);
+  }
+  return String(value);
+};
+
+const resolveManagerSchoolName = (
+  manager: any,
+  schoolsData: School[],
+  fallbackSchoolId?: string,
+  fallbackSchoolName?: string
+): string => {
+  if (typeof manager?.school_name === 'string' && manager.school_name.trim()) {
+    return manager.school_name.trim();
+  }
+  if (typeof manager?.schoolName === 'string' && manager.schoolName.trim()) {
+    return manager.schoolName.trim();
+  }
+  if (manager?.school && typeof manager.school.name === 'string' && manager.school.name.trim()) {
+    return manager.school.name.trim();
+  }
+  if (manager?.school_id && typeof manager.school_id === 'object' && typeof manager.school_id.name === 'string' && manager.school_id.name.trim()) {
+    return manager.school_id.name.trim();
+  }
+
+  const schoolId = fallbackSchoolId || toStringId(manager?.school_id || manager?.schoolId || manager?.school?._id || manager?.school?.id);
+  const school = schoolsData.find((entry) => entry.id === schoolId);
+  if (school?.name) return school.name;
+
+  if (fallbackSchoolName && fallbackSchoolName.trim()) return fallbackSchoolName.trim();
+  return 'Ecole non trouvee';
+};
 
 const getInitials = (name: string) => {
   return name
@@ -76,7 +114,7 @@ const CanteenManagers: React.FC<CanteenManagersProps> = ({ initialSearch = '' })
       
       // Charger les gestionnaires de cantine de l'école du school admin
       if (resolvedUser?.schoolId) {
-        await loadCanteenManagers(resolvedUser.schoolId);
+        await loadCanteenManagers(resolvedUser.schoolId, schoolsData, resolvedUser);
       }
     } catch (error) {
       console.error('Erreur lors du chargement des données:', error);
@@ -89,7 +127,11 @@ const CanteenManagers: React.FC<CanteenManagersProps> = ({ initialSearch = '' })
     return storedUser ? JSON.parse(storedUser) : null;
   };
 
-  const loadCanteenManagers = async (schoolId: string) => {
+  const loadCanteenManagers = async (
+    schoolId: string,
+    schoolsData: School[] = schools,
+    currentUserData: any = currentUser
+  ) => {
     try {
       // Utiliser le bon endpoint avec le school_id en paramètre
       const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/users/canteen-managers/school/${schoolId}`, {
@@ -100,7 +142,25 @@ const CanteenManagers: React.FC<CanteenManagersProps> = ({ initialSearch = '' })
 
       if (response.ok) {
         const data = await response.json();
-        setCanteenManagers(data.data || []);
+        const normalizedManagers: CanteenManager[] = (data.data || []).map((manager: any) => {
+          const managerSchoolId = toStringId(
+            manager.school_id || manager.schoolId || manager.school?._id || manager.school?.id
+          ) || schoolId;
+
+          return {
+            ...manager,
+            id: toStringId(manager.id || manager._id),
+            school_id: managerSchoolId,
+            school_name: resolveManagerSchoolName(
+              manager,
+              schoolsData,
+              managerSchoolId,
+              currentUserData?.schoolName
+            )
+          };
+        });
+
+        setCanteenManagers(normalizedManagers);
       } else {
         console.error('Erreur lors du chargement des gestionnaires:', response.status);
         setCanteenManagers([]);
@@ -308,11 +368,11 @@ const CanteenManagers: React.FC<CanteenManagersProps> = ({ initialSearch = '' })
   );
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="space-y-8 animate-in fade-in duration-500">
+      <div className="surface-card p-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h2 className="text-2xl font-black text-slate-800">Gestionnaires de Cantine</h2>
-          <p className="text-sm text-slate-500 font-medium">Gérez les comptes des gestionnaires de votre établissement.</p>
+          <h2 className="section-title">Gestionnaires de Cantine</h2>
+          <p className="text-sm text-slate-500 font-medium mt-1">Gérez les comptes des gestionnaires de votre établissement.</p>
         </div>
         <div className="flex space-x-3">
           {/* Debug temporaire pour afficher le rôle de l'utilisateur */}
@@ -324,7 +384,7 @@ const CanteenManagers: React.FC<CanteenManagersProps> = ({ initialSearch = '' })
           
           <button 
             onClick={() => setIsModalOpen(true)}
-            className="flex items-center space-x-2 bg-purple-600 text-white px-5 py-2.5 rounded-xl hover:bg-purple-700 transition-all shadow-md font-bold text-sm"
+            className="flex items-center space-x-2 bg-slate-800 text-white px-5 py-2.5 rounded-xl hover:bg-slate-900 transition-all shadow-md font-bold text-sm"
           >
             <UserPlus size={18} />
             <span>Ajouter un Gestionnaire</span>
@@ -332,10 +392,10 @@ const CanteenManagers: React.FC<CanteenManagersProps> = ({ initialSearch = '' })
         </div>
       </div>
 
-      <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+      <div className="table-shell">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
-            <thead className="bg-slate-50/50 text-slate-400 text-[10px] uppercase font-black tracking-widest">
+            <thead className="table-head">
               <tr>
                 <th className="px-6 py-4">Gestionnaire</th>
                 <th className="px-6 py-4">Email</th>
@@ -349,7 +409,7 @@ const CanteenManagers: React.FC<CanteenManagersProps> = ({ initialSearch = '' })
                 <tr key={manager.id} className="hover:bg-slate-50/30 transition-colors group">
                   <td className="px-6 py-4">
                     <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 rounded-xl bg-purple-600 flex items-center justify-center text-[10px] font-black text-white shadow-sm">
+                      <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-[10px] font-black text-white shadow-sm">
                         {getInitials(`${manager.first_name} ${manager.last_name}`)}
                       </div>
                       <div>
@@ -365,13 +425,15 @@ const CanteenManagers: React.FC<CanteenManagersProps> = ({ initialSearch = '' })
                     <div className="text-slate-600">{manager.phone}</div>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="text-slate-600">{manager.school_name}</div>
+                    <div className="text-slate-600">
+                      {manager.school_name || schools.find((entry) => entry.id === toStringId(manager.school_id))?.name || currentUser?.schoolName || '-'}
+                    </div>
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button 
                         onClick={() => handleDeleteManager(manager.id)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        className="action-icon text-red-600"
                       >
                         <Trash2 size={16} />
                       </button>
@@ -391,7 +453,7 @@ const CanteenManagers: React.FC<CanteenManagersProps> = ({ initialSearch = '' })
                       </div>
                       <button 
                         onClick={() => setIsModalOpen(true)}
-                        className="px-4 py-2 bg-purple-600 text-white rounded-xl font-bold hover:bg-purple-700 transition-all flex items-center space-x-2"
+                        className="btn-primary flex items-center space-x-2 px-4 py-2 font-bold"
                       >
                         <Plus size={16} />
                         <span>Ajouter un Gestionnaire</span>
@@ -408,7 +470,7 @@ const CanteenManagers: React.FC<CanteenManagersProps> = ({ initialSearch = '' })
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-purple-600 text-white">
+            <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-800 text-white">
               <h3 className="font-black text-2xl">Ajouter un Gestionnaire de Cantine</h3>
               <button onClick={() => setIsModalOpen(false)} className="hover:rotate-90 transition-transform"><X size={24} /></button>
             </div>
@@ -473,7 +535,7 @@ const CanteenManagers: React.FC<CanteenManagersProps> = ({ initialSearch = '' })
               </div>
               <div className="pt-4 flex space-x-3">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 px-4 py-3 border border-slate-200 rounded-xl font-bold text-slate-400 hover:bg-slate-50 transition-colors">Annuler</button>
-                <button type="submit" className="flex-1 px-4 py-3 bg-purple-600 text-white rounded-xl font-black shadow-lg hover:bg-purple-700 transition-all flex items-center justify-center space-x-2">
+                <button type="submit" className="flex-1 px-4 py-3 bg-slate-800 text-white rounded-xl font-black shadow-lg hover:bg-slate-900 transition-all flex items-center justify-center space-x-2">
                   <Check size={20} />
                   <span>Créer le Gestionnaire</span>
                 </button>
@@ -486,7 +548,7 @@ const CanteenManagers: React.FC<CanteenManagersProps> = ({ initialSearch = '' })
       {createdManager && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-purple-600 text-white">
+            <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-800 text-white">
               <h3 className="font-black text-2xl">Gestionnaire Créé avec Succès</h3>
               <button onClick={() => setCreatedManager(null)} className="hover:rotate-90 transition-transform"><X size={24} /></button>
             </div>
@@ -523,7 +585,7 @@ const CanteenManagers: React.FC<CanteenManagersProps> = ({ initialSearch = '' })
               <div className="flex space-x-3">
                 <button 
                   onClick={sendPasswordByEmail}
-                  className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all flex items-center justify-center space-x-2"
+                  className="flex-1 px-4 py-3 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-900 transition-all flex items-center justify-center space-x-2"
                 >
                   <Mail size={16} />
                   <span>Envoyer par Email</span>
@@ -540,7 +602,7 @@ const CanteenManagers: React.FC<CanteenManagersProps> = ({ initialSearch = '' })
               <div className="pt-4">
                 <button 
                   onClick={() => setCreatedManager(null)}
-                  className="w-full px-4 py-3 bg-purple-600 text-white rounded-xl font-black shadow-lg hover:bg-purple-700 transition-all"
+                  className="w-full px-4 py-3 bg-slate-800 text-white rounded-xl font-black shadow-lg hover:bg-slate-900 transition-all"
                 >
                   Terminer
                 </button>

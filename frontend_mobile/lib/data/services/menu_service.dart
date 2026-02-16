@@ -6,11 +6,13 @@ class MenuService {
 
   MenuService(this._apiService);
 
+  bool _hasValue(String? value) => value != null && value.trim().isNotEmpty;
+
   // Obtenir le menu du jour
   Future<ApiResponse<Menu>> getTodayMenu({String? schoolId}) async {
     try {
       final Map<String, dynamic> queryParams = {};
-      if (schoolId != null) queryParams['schoolId'] = schoolId;
+      if (_hasValue(schoolId)) queryParams['school_id'] = schoolId!.trim();
 
       final response = await _apiService.get<Map<String, dynamic>>(
         '/menus/today',
@@ -40,7 +42,7 @@ class MenuService {
   }) async {
     try {
       final Map<String, dynamic> queryParams = {};
-      if (schoolId != null) queryParams['schoolId'] = schoolId;
+      if (_hasValue(schoolId)) queryParams['school_id'] = schoolId!.trim();
       if (startDate != null) queryParams['startDate'] = startDate.toIso8601String();
       if (endDate != null) queryParams['endDate'] = endDate.toIso8601String();
       if (limit != null) queryParams['limit'] = limit;
@@ -70,7 +72,7 @@ class MenuService {
   Future<ApiResponse<Menu>> getMenuByDate(String date, {String? schoolId}) async {
     try {
       final Map<String, dynamic> queryParams = {};
-      if (schoolId != null) queryParams['schoolId'] = schoolId;
+      if (_hasValue(schoolId)) queryParams['school_id'] = schoolId!.trim();
 
       final response = await _apiService.get<Map<String, dynamic>>(
         '/menus/date/$date',
@@ -224,7 +226,7 @@ class MenuService {
   }) async {
     try {
       final Map<String, dynamic> queryParams = {};
-      if (schoolId != null) queryParams['schoolId'] = schoolId;
+      if (_hasValue(schoolId)) queryParams['school_id'] = schoolId!.trim();
       queryParams['days'] = days;
 
       final response = await _apiService.get<List<dynamic>>(

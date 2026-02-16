@@ -90,14 +90,14 @@ class _ModernTextFieldState extends State<ModernTextField> {
             borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
             border: Border.all(
               color: _isFocused
-                  ? AppColors.primary
-                  : AppColors.textTertiary.withOpacity(0.3),
+                  ? AppColors.secondaryDark
+                  : AppColors.border,
               width: _isFocused ? 2 : 1,
             ),
             boxShadow: _isFocused
                 ? [
                     BoxShadow(
-                      color: AppColors.primary.withOpacity(0.1),
+                      color: AppColors.secondary.withOpacity(0.18),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -132,7 +132,7 @@ class _ModernTextFieldState extends State<ModernTextField> {
               prefixIcon: widget.prefixIcon != null
                   ? Icon(
                       widget.prefixIcon,
-                      color: _isFocused ? AppColors.primary : AppColors.textTertiary,
+                      color: _isFocused ? AppColors.secondaryDark : AppColors.textTertiary,
                       size: 20,
                     )
                   : null,

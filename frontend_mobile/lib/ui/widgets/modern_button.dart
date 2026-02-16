@@ -80,7 +80,10 @@ class _ModernButtonState extends State<ModernButton>
   Widget build(BuildContext context) {
     final backgroundColor = widget.backgroundColor ??
         (widget.isSecondary ? AppColors.secondary : AppColors.primary);
-    final textColor = widget.textColor ?? Colors.white;
+    final defaultTextColor = widget.isOutlined
+        ? backgroundColor
+        : (widget.isSecondary ? AppColors.primaryDark : Colors.white);
+    final textColor = widget.textColor ?? defaultTextColor;
     final buttonHeight = widget.height ?? 56.0;
 
     Widget child;
@@ -155,13 +158,15 @@ class _ModernButtonState extends State<ModernButton>
                     ? Border.all(color: backgroundColor, width: 2)
                     : null,
                 boxShadow: widget.onPressed != null && !widget.isOutlined
-                    ? [
-                        BoxShadow(
-                          color: backgroundColor.withOpacity(0.3),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ]
+                    ? (widget.isSecondary
+                        ? AppColors.buttonShadow
+                        : [
+                            BoxShadow(
+                              color: backgroundColor.withOpacity(0.3),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ])
                     : null,
               ),
               child: Center(child: child),

@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import User from '../models/User';
 import School from '../models/School';
+import Student from '../models/Student';
 import { ApiResponse } from '../types';
 import { isValidGmailEmail } from '../utils/validators';
 
@@ -322,26 +323,258 @@ export const getUserById = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
-// Update user profile
-export const updateUser = async (req: Request, res: Response): Promise<void> => {
+// Create user (SUPER_ADMIN only)
+export const createUser = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
-    const { first_name, last_name, phone } = req.body;
+    const { first_name, last_name, email, role, school_id } = req.body;
+    const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+    const allowedRoles = ['SCHOOL_ADMIN', 'CANTEEN_MANAGER', 'PARENT'];
 
-    // Prevent updating sensitive fields
-    if (req.body.email || req.body.password || req.body.role) {
+    if (!first_name || !last_name || !role) {
       res.status(400).json({
         success: false,
-        message: 'Cannot update email, password, or role through this endpoint.',
+        message: 'first_name, last_name, and role are required.',
       } as ApiResponse);
       return;
     }
 
+    if (!allowedRoles.includes(role)) {
+      res.status(400).json({
+        success: false,
+        message: 'Allowed roles: SCHOOL_ADMIN, CANTEEN_MANAGER, PARENT.',
+      } as ApiResponse);
+      return;
+    }
+
+    let resolvedSchoolId = school_id || undefined;
+    let resolvedSchool: any = null;
+    if (role === 'SCHOOL_ADMIN' || role === 'CANTEEN_MANAGER') {
+      if (!resolvedSchoolId) {
+        res.status(400).json({
+          success: false,
+          message: 'School is required for SCHOOL_ADMIN and CANTEEN_MANAGER.',
+        } as ApiResponse);
+        return;
+      }
+      resolvedSchool = await School.findById(resolvedSchoolId);
+      if (!resolvedSchool) {
+        res.status(404).json({
+          success: false,
+          message: 'School not found.',
+        } as ApiResponse);
+        return;
+      }
+    } else {
+      resolvedSchoolId = undefined;
+    }
+
+    const sanitizePart = (value: unknown): string =>
+      String(value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '.')
+        .replace(/^\.+|\.+$/g, '');
+
+    const generateSchoolAdminEmail = async (): Promise<string> => {
+      const firstPart = sanitizePart(first_name) || 'admin';
+      const lastPart = sanitizePart(last_name) || 'user';
+      const schoolPart = sanitizePart(resolvedSchool?.name || 'school') || 'school';
+      const localBase = `admin.${firstPart}.${lastPart}`;
+      const domainBase = `${schoolPart}.dabali.bf`;
+
+      for (let index = 0; index < 200; index += 1) {
+        const suffix = index === 0 ? '' : `.${index + 1}`;
+        const candidate = `${localBase}${suffix}@${domainBase}`;
+        const existing = await User.findOne({ email: candidate }).select('_id');
+        if (!existing) return candidate;
+      }
+
+      const random = Math.random().toString(36).slice(2, 8);
+      return `${localBase}.${random}@${domainBase}`;
+    };
+
+    let resolvedEmail = normalizedEmail;
+    if (!resolvedEmail) {
+      if (role !== 'SCHOOL_ADMIN') {
+        res.status(400).json({
+          success: false,
+          message: 'Email is required for this role.',
+        } as ApiResponse);
+        return;
+      }
+      resolvedEmail = await generateSchoolAdminEmail();
+    }
+
+    const existingUser = await User.findOne({ email: resolvedEmail });
+    if (existingUser) {
+      res.status(400).json({
+        success: false,
+        message: 'A user with this email already exists.',
+      } as ApiResponse);
+      return;
+    }
+
+    const temporaryPassword = generateTemporaryPassword();
+    const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
+
+    const user = new User({
+      first_name,
+      last_name,
+      email: resolvedEmail,
+      password: hashedPassword,
+      role,
+      school_id: resolvedSchoolId,
+      is_temporary_password: true,
+      created_by: req.user?.id,
+    });
+
+    await user.save();
+
+    if (role === 'SCHOOL_ADMIN' && resolvedSchoolId) {
+      await School.findByIdAndUpdate(resolvedSchoolId, {
+        admin_id: user._id,
+      });
+    }
+
+    const userObject = user.toObject();
+    const { password: _, ...userWithoutPassword } = userObject;
+
+    res.status(201).json({
+      success: true,
+      message: 'User created successfully.',
+      data: {
+        user: userWithoutPassword,
+        temporary_password: temporaryPassword,
+        email_generated: !normalizedEmail,
+      },
+    } as ApiResponse);
+  } catch (error) {
+    console.error('Create user error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error creating user.',
+    } as ApiResponse);
+  }
+};
+
+// Update user profile
+export const updateUser = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const requesterId = req.user?.id?.toString();
+    const existingUser = await User.findById(id);
+
+    if (!existingUser) {
+      res.status(404).json({
+        success: false,
+        message: 'User not found.',
+      } as ApiResponse);
+      return;
+    }
+
+    if (req.body.password) {
+      res.status(400).json({
+        success: false,
+        message: 'Password cannot be updated through this endpoint.',
+      } as ApiResponse);
+      return;
+    }
+
+    if (req.body.phone !== undefined) {
+      res.status(400).json({
+        success: false,
+        message: 'Phone number cannot be updated by SUPER_ADMIN.',
+      } as ApiResponse);
+      return;
+    }
+
+    if (requesterId && requesterId === id && req.body.role && req.body.role !== existingUser.role) {
+      res.status(400).json({
+        success: false,
+        message: 'You cannot change your own role.',
+      } as ApiResponse);
+      return;
+    }
+
+    const updates: any = {};
+    const { first_name, last_name, phone, email, role, school_id } = req.body;
+
+    if (first_name !== undefined) updates.first_name = first_name;
+    if (last_name !== undefined) updates.last_name = last_name;
+    if (phone !== undefined) updates.phone = phone;
+
+    if (email !== undefined) {
+      const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+      if (!normalizedEmail) {
+        res.status(400).json({
+          success: false,
+          message: 'Email is invalid.',
+        } as ApiResponse);
+        return;
+      }
+
+      const duplicate = await User.findOne({ email: normalizedEmail, _id: { $ne: existingUser._id } });
+      if (duplicate) {
+        res.status(400).json({
+          success: false,
+          message: 'Another user already uses this email.',
+        } as ApiResponse);
+        return;
+      }
+
+      updates.email = normalizedEmail;
+    }
+
+    if (role !== undefined) {
+      const allowedRoles = ['SUPER_ADMIN', 'SCHOOL_ADMIN', 'CANTEEN_MANAGER', 'PARENT'];
+      if (!allowedRoles.includes(role)) {
+        res.status(400).json({
+          success: false,
+          message: 'Invalid role provided.',
+        } as ApiResponse);
+        return;
+      }
+      updates.role = role;
+    }
+
+    if (school_id !== undefined) {
+      updates.school_id = school_id || undefined;
+    }
+
+    const effectiveRole = updates.role || existingUser.role;
+    const effectiveSchoolId = updates.school_id !== undefined ? updates.school_id : existingUser.school_id;
+
+    if ((effectiveRole === 'SCHOOL_ADMIN' || effectiveRole === 'CANTEEN_MANAGER') && !effectiveSchoolId) {
+      res.status(400).json({
+        success: false,
+        message: 'School is required for SCHOOL_ADMIN and CANTEEN_MANAGER.',
+      } as ApiResponse);
+      return;
+    }
+
+    if (effectiveRole === 'SCHOOL_ADMIN' || effectiveRole === 'CANTEEN_MANAGER') {
+      const schoolExists = await School.findById(effectiveSchoolId);
+      if (!schoolExists) {
+        res.status(400).json({
+          success: false,
+          message: 'School not found.',
+        } as ApiResponse);
+        return;
+      }
+    }
+
+    const updateDoc: any = { ...updates };
+    if (effectiveRole === 'SUPER_ADMIN' || effectiveRole === 'PARENT') {
+      delete updateDoc.school_id;
+      updateDoc.$unset = { school_id: 1 };
+    }
+
     const user = await User.findByIdAndUpdate(
       id,
-      { first_name, last_name, phone },
+      updateDoc,
       { new: true, runValidators: true }
-    );
+    ).populate('school_id', 'name');
 
     if (!user) {
       res.status(404).json({
@@ -373,8 +606,17 @@ export const updateUser = async (req: Request, res: Response): Promise<void> => 
 export const deleteUser = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
+    const requesterId = req.user?.id?.toString();
 
-    const user = await User.findByIdAndDelete(id);
+    if (requesterId && requesterId === id) {
+      res.status(400).json({
+        success: false,
+        message: 'You cannot delete your own account.',
+      } as ApiResponse);
+      return;
+    }
+
+    const user = await User.findById(id);
     if (!user) {
       res.status(404).json({
         success: false,
@@ -382,6 +624,22 @@ export const deleteUser = async (req: Request, res: Response): Promise<void> => 
       } as ApiResponse);
       return;
     }
+
+    if (user.role === 'PARENT') {
+      await Student.updateMany(
+        { parent_id: user._id },
+        { $unset: { parent_id: 1 } }
+      );
+    }
+
+    if (user.role === 'SCHOOL_ADMIN') {
+      await School.updateMany(
+        { admin_id: user._id },
+        { $unset: { admin_id: 1 } }
+      );
+    }
+
+    await User.findByIdAndDelete(id);
 
     res.status(200).json({
       success: true,
@@ -399,11 +657,64 @@ export const deleteUser = async (req: Request, res: Response): Promise<void> => 
 // List all users (admin only)
 export const getAllUsers = async (req: Request, res: Response): Promise<void> => {
   try {
-    const users = await User.find().select('-password');
+    const users = await User.find()
+      .select('-password')
+      .populate('school_id', 'name')
+      .lean();
+
+    const parentStats = await Student.aggregate([
+      { $match: { parent_id: { $ne: null } } },
+      {
+        $group: {
+          _id: '$parent_id',
+          children_count: { $sum: 1 },
+          school_ids: { $addToSet: '$school_id' },
+        }
+      },
+      {
+        $lookup: {
+          from: 'schools',
+          localField: 'school_ids',
+          foreignField: '_id',
+          as: 'schools',
+        }
+      },
+      {
+        $project: {
+          children_count: 1,
+          school_names: '$schools.name',
+        }
+      }
+    ]);
+
+    const parentStatsMap = new Map<string, { children_count: number; school_names: string[] }>();
+    parentStats.forEach((stat: any) => {
+      parentStatsMap.set(String(stat._id), {
+        children_count: stat.children_count || 0,
+        school_names: stat.school_names || [],
+      });
+    });
+
+    const data = users.map((user: any) => {
+      const normalizedUser: any = { ...user };
+
+      if (user.role === 'PARENT') {
+        const stats = parentStatsMap.get(String(user._id));
+        normalizedUser.children_count = stats?.children_count || 0;
+        normalizedUser.school_name = stats?.school_names?.join(', ') || '';
+      } else {
+        normalizedUser.children_count = 0;
+        if (user.school_id && typeof user.school_id === 'object') {
+          normalizedUser.school_name = user.school_id.name || '';
+        }
+      }
+
+      return normalizedUser;
+    });
 
     res.status(200).json({
       success: true,
-      data: users,
+      data,
     } as ApiResponse);
   } catch (error) {
     console.error('Get all users error:', error);

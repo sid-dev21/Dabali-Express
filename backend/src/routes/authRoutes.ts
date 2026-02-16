@@ -4,6 +4,7 @@ import {
   register,
   registerSchoolAdmin,
   getCurrentUser,
+  updateCredentials,
   changeTemporaryPassword,
   logout,
   refreshToken,
@@ -21,6 +22,7 @@ router.post('/register', register);
 // Protected routes
 router.use(authMiddleware);
 router.get('/me', getCurrentUser);
+router.post('/update-credentials', updateCredentials);
 router.post('/change-temporary-password', changeTemporaryPassword);
 router.post('/logout', logout);
 router.post('/refresh-token', refreshToken);

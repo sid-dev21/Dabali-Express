@@ -1,0 +1,5 @@
+[dotenv@17.2.4] injecting env (7) from .env -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
+ MongoDB connected
+Backend server running on http://localhost:5000
+API available at http://localhost:5000/api
+Super admin: admin@gmail.com

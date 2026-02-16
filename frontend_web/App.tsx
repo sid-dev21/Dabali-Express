@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { User, UserRole, Student, School, Payment } from './types';
-import { authApi, studentsApi, schoolsApi, paymentsApi } from './services/api';
+import { User, UserRole } from './types';
+import { authApi, notificationsApi } from './services/api';
 import { getInitials } from './utils/helpers';
 
 import Sidebar from './components/Sidebar';
@@ -25,9 +25,18 @@ import Subscriptions from './components/Subscriptions';
 
 import CanteenManagers from './components/CanteenManagers';
 
-import Auth from './components/Auth';
+import Stock from './components/Stock';
 
-import { Menu, Bell, BellOff, Search, X, User as UserIcon, School as SchoolIcon, CreditCard, ArrowRight, CheckCircle2, Info } from 'lucide-react';
+import CanteenReports from './components/CanteenReports';
+
+import SuperAdminReports from './components/SuperAdminReports';
+
+import CanteenHistory from './components/CanteenHistory';
+
+import Auth from './components/Auth';
+import Notifications from './components/Notifications';
+
+import { Menu, Bell, BellOff, X } from 'lucide-react';
 
 
 
@@ -38,12 +47,10 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
 
   const [isInitialLoad, setIsInitialLoad] = useState(true);
-
-  const [globalSearch, setGlobalSearch] = useState('');
-
-  const [showSearchResults, setShowSearchResults] = useState(false);
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
 
@@ -57,14 +64,6 @@ const App: React.FC = () => {
 
   });
 
-  const [searchResults, setSearchResults] = useState<{
-    students: Student[];
-    schools: School[];
-    payments: Payment[];
-  }>({ students: [], schools: [], payments: [] });
-  
-
-  const searchRef = useRef<HTMLDivElement>(null);
   const triedSchoolRefresh = useRef(false);
 
 
@@ -81,6 +80,18 @@ const App: React.FC = () => {
 
     loadUser();
   }, [currentUser]); // ✅ Dépendance ajoutée
+  useEffect(() => {
+    const onUnauthorized = () => {
+      setCurrentUser(null);
+      setActiveTab('dashboard');
+      setIsInitialLoad(false);
+    };
+
+    window.addEventListener('auth:unauthorized', onUnauthorized as EventListener);
+    return () => {
+      window.removeEventListener('auth:unauthorized', onUnauthorized as EventListener);
+    };
+  }, []);
 
   // Rafraîchir le currentUser une seule fois si le schoolId est manquant (hors SUPER_ADMIN)
   useEffect(() => {
@@ -104,94 +115,32 @@ const App: React.FC = () => {
     updateUserWithSchool();
   }, [currentUser]);
 
-
-
-  // Gestion du clic en dehors de la recherche
-
   useEffect(() => {
+    if (!currentUser) {
+      setUnreadNotificationsCount(0);
+      return;
+    }
 
-    const handleClickOutside = (event: MouseEvent) => {
-
-      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
-
-        setShowSearchResults(false);
-
-      }
-
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-
-  }, []);
-
-
-
-  // Recherche globale
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const performSearch = async () => {
-      if (!globalSearch || globalSearch.length < 2 || !currentUser) {
-        setSearchResults({ students: [], schools: [], payments: [] });
-        return;
-      }
-
-
-      const term = globalSearch.toLowerCase();
-
-      const schoolId = currentUser.schoolId;
-
-
-
+    let isMounted = true;
+    const refreshUnreadCount = async () => {
       try {
-
-        const [allStudents, allSchools, allPayments] = await Promise.all([
-
-          studentsApi.getStudents(schoolId),
-
-          schoolsApi.getSchools(),
-
-          paymentsApi.getPayments(schoolId),
-
-        ]);
-
-
-
-        if (cancelled) return;
-
-        setSearchResults({
-          students: allStudents
-            .filter(s => `${s.firstName} ${s.lastName}`.toLowerCase().includes(term))
-            .slice(0, 5),
-          schools: currentUser.role === UserRole.SUPER_ADMIN
-
-            ? allSchools.filter(s => s.name.toLowerCase().includes(term)).slice(0, 3)
-
-            : [],
-
-          payments: allPayments
-
-            .filter(p => p.studentName?.toLowerCase().includes(term))
-
-            .slice(0, 3),
-
-        });
-
-      } catch (error) {
-        if (!cancelled) {
-          console.error('Search error:', error);
-          setSearchResults({ students: [], schools: [], payments: [] });
+        const result = await notificationsApi.getUnreadCount();
+        if (isMounted) {
+          setUnreadNotificationsCount(result.count || 0);
         }
+      } catch (error) {
+        // Ignore transient notification polling errors in topbar badge.
       }
     };
 
-    performSearch();
+    refreshUnreadCount();
+    const intervalId = window.setInterval(refreshUnreadCount, 15000);
+    return () => {
+      isMounted = false;
+      window.clearInterval(intervalId);
+    };
+  }, [currentUser, isNotificationsOpen]);
 
-    return () => { cancelled = true; };
-  }, [globalSearch, currentUser]);
 
 
   const handleLoginSuccess = (user: User) => {
@@ -207,7 +156,6 @@ const App: React.FC = () => {
     authApi.logout();
     setCurrentUser(null);
     setActiveTab('dashboard');
-    setGlobalSearch('');
     setIsInitialLoad(false); // ✅ Réinitialiser l'état de chargement
   };
 
@@ -225,7 +173,7 @@ const App: React.FC = () => {
 
     if (newState) {
 
-      switch(currentUser?.role) {
+      switch(currentUser.role) {
 
         case UserRole.SUPER_ADMIN: 
 
@@ -269,23 +217,11 @@ const App: React.FC = () => {
 
 
 
-  const hasResults = searchResults.students.length > 0 || 
-
-                     searchResults.schools.length > 0 || 
-
-                     searchResults.payments.length > 0;
-
-
-
   const renderContent = () => {
 
     const commonProps = {
 
-      schoolId: currentUser?.schoolId,
-
-      userRole: currentUser?.role || UserRole.CANTEEN_MANAGER,
-
-      initialSearch: globalSearch
+      schoolId: currentUser.schoolId,
 
     };
 
@@ -293,7 +229,7 @@ const App: React.FC = () => {
 
     switch (activeTab) {
 
-      case 'dashboard': return <Dashboard searchQuery={globalSearch} userRole={currentUser!.role} schoolId={currentUser?.schoolId} />;
+      case 'dashboard': return <Dashboard userRole={currentUser!.role} schoolId={currentUser.schoolId} />;
 
       case 'students': return <Students {...commonProps} />;
 
@@ -301,15 +237,23 @@ const App: React.FC = () => {
 
       case 'attendance': return <Attendance {...commonProps} />;
 
-      case 'menus': return <Menus schoolId={currentUser?.schoolId} initialSearch={globalSearch} userRole={currentUser?.role} />;
+      case 'menus': return <Menus schoolId={currentUser.schoolId} userRole={currentUser.role} />;
 
-      case 'schools': return <Schools initialSearch={globalSearch} />;
+      case 'schools': return <Schools />;
 
-      case 'payments': return <Payments schoolId={currentUser?.schoolId} initialSearch={globalSearch} />;
+      case 'payments': return <Payments schoolId={currentUser.schoolId} />;
 
-      case 'users': return <Users initialSearch={globalSearch} />;
+      case 'users': return <Users />;
 
-      case 'canteen-managers': return <CanteenManagers initialSearch={globalSearch} />;
+      case 'canteen-managers': return <CanteenManagers />;
+
+      case 'stock': return <Stock schoolId={currentUser.schoolId} schoolName={currentUser.schoolName} managerName={currentUser.name} />;
+
+      case 'canteen-reports': return <CanteenReports schoolId={currentUser.schoolId} schoolName={currentUser.schoolName} adminName={currentUser.name} />;
+
+      case 'canteen-history': return <CanteenHistory schoolName={currentUser.schoolName} managerName={currentUser.name} />;
+
+      case 'school-admin-reports': return <SuperAdminReports />;
 
       case 'settings': return <Settings currentUser={currentUser!} onUserUpdate={setCurrentUser} />;
 
@@ -335,13 +279,13 @@ const App: React.FC = () => {
 
   return (
 
-    <div className="flex min-h-screen bg-slate-50 font-sans selection:bg-emerald-100 selection:text-emerald-900">
+    <div className="app-shell flex h-screen overflow-hidden font-sans selection:bg-emerald-100 selection:text-emerald-900">
 
       <Sidebar 
 
         activeTab={activeTab} 
 
-        setActiveTab={(tab) => { setActiveTab(tab); setGlobalSearch(''); }} 
+        setActiveTab={(tab) => { setActiveTab(tab); }} 
 
         userRole={currentUser.role} 
 
@@ -355,8 +299,8 @@ const App: React.FC = () => {
 
       
 
-      <main className="flex-1 flex flex-col min-h-screen overflow-hidden">
-        <header className="bg-white/80 backdrop-blur-md h-16 border-b border-slate-100 px-4 md:px-8 flex items-center justify-between sticky top-0 z-30">
+      <main className="flex-1 flex flex-col min-h-0">
+        <header className="app-topbar h-16 px-4 md:px-8 flex items-center justify-between sticky top-0 z-30">
 
           <div className="flex items-center space-x-4 flex-1">
 
@@ -374,211 +318,6 @@ const App: React.FC = () => {
 
 
 
-            <div ref={searchRef} className="relative hidden md:block w-full max-w-xl">
-
-              <div className={`flex items-center transition-all duration-300 ${globalSearch ? 'ring-2 ring-emerald-500/20 bg-white shadow-lg' : 'bg-slate-100/60'} px-4 py-2.5 rounded-2xl border border-slate-200/50`}>
-
-                <Search size={18} className={`${globalSearch ? 'text-emerald-600' : 'text-slate-400'} mr-2`} />
-
-                <input 
-
-                  type="text" 
-
-                  placeholder="Recherche rapide (élève, école, paiement)..." 
-
-                  className="bg-transparent border-none text-sm focus:ring-0 p-0 w-full font-medium placeholder:text-slate-400" 
-
-                  value={globalSearch}
-
-                  onChange={(e) => {
-
-                    setGlobalSearch(e.target.value);
-
-                    setShowSearchResults(true);
-
-                  }}
-
-                  onFocus={() => setShowSearchResults(true)}
-
-                />
-
-              </div>
-
-
-
-              {showSearchResults && globalSearch.length >= 2 && (
-
-                <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 max-h-[400px] overflow-y-auto custom-scrollbar">
-
-                  {!hasResults ? (
-
-                    <div className="p-8 text-center text-slate-400 font-bold uppercase text-[10px] tracking-widest">
-
-                      Aucun résultat pour "{globalSearch}"
-
-                    </div>
-
-                  ) : (
-
-                    <div className="p-2">
-
-                      {searchResults.students.length > 0 && (
-
-                        <div className="mb-2">
-
-                          <p className="px-4 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">Élèves</p>
-
-                          {searchResults.students.map(s => (
-
-                            <button 
-
-                              key={s.id}
-
-                              onClick={() => { setShowSearchResults(false); setActiveTab('students'); }}
-
-                              className="w-full flex items-center justify-between p-3 hover:bg-emerald-50 rounded-xl transition-colors group"
-
-                            >
-
-                              <div className="flex items-center space-x-3">
-
-                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-black ${
-
-                                  s.subscriptionStatus === 'active' ? 'bg-emerald-100 text-emerald-700' : 
-
-                                  s.subscriptionStatus === 'warning' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
-
-                                }`}>
-
-                                  {getInitials(`${s.firstName} ${s.lastName}`)}
-
-                                </div>
-
-                                <div className="text-left">
-
-                                  <p className="text-sm font-bold text-slate-700">{s.firstName} {s.lastName}</p>
-
-                                  <p className="text-[10px] text-slate-400 font-bold uppercase">{s.class}</p>
-
-                                </div>
-
-                              </div>
-
-                              <ArrowRight size={14} className="text-slate-300 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
-
-                            </button>
-
-                          ))}
-
-                        </div>
-
-                      )}
-
-
-
-                      {searchResults.schools.length > 0 && (
-
-                        <div className="mb-2">
-
-                          <p className="px-4 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">Écoles</p>
-
-                          {searchResults.schools.map(s => (
-
-                            <button 
-
-                              key={s.id}
-
-                              onClick={() => { setShowSearchResults(false); setActiveTab('schools'); }}
-
-                              className="w-full flex items-center justify-between p-3 hover:bg-blue-50 rounded-xl transition-colors group"
-
-                            >
-
-                              <div className="flex items-center space-x-3">
-
-                                <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
-
-                                  <SchoolIcon size={16} />
-
-                                </div>
-
-                                <div className="text-left">
-
-                                  <p className="text-sm font-bold text-slate-700">{s.name}</p>
-
-                                  <p className="text-[10px] text-slate-400 font-bold uppercase">{s.city}</p>
-
-                                </div>
-
-                              </div>
-
-                              <ArrowRight size={14} className="text-slate-300 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
-
-                            </button>
-
-                          ))}
-
-                        </div>
-
-                      )}
-
-
-
-                      {searchResults.payments.length > 0 && (
-
-                        <div className="mb-2">
-
-                          <p className="px-4 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">Paiements</p>
-
-                          {searchResults.payments.map(p => (
-
-                            <button 
-
-                              key={p.id}
-
-                              onClick={() => { setShowSearchResults(false); setActiveTab('payments'); }}
-
-                              className="w-full flex items-center justify-between p-3 hover:bg-purple-50 rounded-xl transition-colors group"
-
-                            >
-
-                              <div className="flex items-center space-x-3">
-
-                                <div className="w-8 h-8 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center">
-
-                                  <CreditCard size={16} />
-
-                                </div>
-
-                                <div className="text-left">
-
-                                  <p className="text-sm font-bold text-slate-700">{p.studentName}</p>
-
-                                  <p className="text-[10px] text-slate-400 font-bold uppercase">{p.amount} FCFA</p>
-
-                                </div>
-
-                              </div>
-
-                              <ArrowRight size={14} className="text-slate-300 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
-
-                            </button>
-
-                          ))}
-
-                        </div>
-
-                      )}
-
-                    </div>
-
-                  )}
-
-                </div>
-
-              )}
-
-            </div>
 
           </div>
 
@@ -595,36 +334,40 @@ const App: React.FC = () => {
             
 
             <button 
+              onClick={() => setIsNotificationsOpen(true)}
 
-              onClick={toggleNotifications}
+              className={`relative p-2 rounded-full transition-all duration-300 border ${
 
-              className={`relative p-2 rounded-xl transition-all duration-300 ${
+                notificationsEnabled ?
 
-                notificationsEnabled 
+                 'text-emerald-600 border-emerald-100 bg-emerald-50 hover:bg-emerald-100 shadow-sm' 
 
-                ? 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100 shadow-sm' 
-
-                : 'text-slate-400 bg-slate-100 hover:bg-slate-200'
+                : 'text-slate-400 border-slate-200 bg-white hover:bg-slate-100'
 
               }`}
 
             >
 
               {notificationsEnabled ? <Bell size={20} /> : <BellOff size={20} />}
+              {unreadNotificationsCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold leading-[18px] text-center">
+                  {unreadNotificationsCount > 99 ? '99+' : unreadNotificationsCount}
+                </span>
+              )}
 
             </button>
 
 
 
-            <div className="flex items-center space-x-3 cursor-pointer group p-1 pr-2 rounded-xl hover:bg-slate-50 transition-all">
+            <div className="flex items-center space-x-3 cursor-pointer group p-1 pr-2 rounded-full hover:bg-slate-50 transition-all">
 
               {currentUser.avatar ? (
 
-                <img src={currentUser.avatar} alt="Profile" className="w-9 h-9 rounded-lg object-cover ring-2 ring-emerald-500/20 shadow-sm" />
+                <img src={currentUser.avatar} alt="Profile" className="w-9 h-9 rounded-full object-cover ring-2 ring-emerald-500/20 shadow-sm" />
 
               ) : (
 
-                <div className="w-9 h-9 rounded-lg bg-emerald-600 flex items-center justify-center text-[10px] font-black text-white shadow-sm ring-2 ring-emerald-500/20">
+                <div className="w-9 h-9 rounded-full bg-emerald-600 flex items-center justify-center text-[10px] font-black text-white shadow-sm ring-2 ring-emerald-500/20">
 
                   {getInitials(currentUser.name)}
 
@@ -654,9 +397,9 @@ const App: React.FC = () => {
 
             <div className={`p-4 rounded-2xl shadow-2xl border backdrop-blur-md flex items-start space-x-3 ${
 
-              toast.type === 'success' 
+              toast.type === 'success' ?
 
-              ? 'bg-emerald-600/95 border-emerald-400 text-white' 
+               'bg-emerald-600/95 border-emerald-400 text-white' 
 
               : 'bg-slate-800/95 border-slate-700 text-white'
 
@@ -682,9 +425,9 @@ const App: React.FC = () => {
 
 
 
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
+        <div className="flex-1 min-h-0 overflow-y-auto p-6 md:p-10 custom-scrollbar">
 
-          <div className="max-w-7xl mx-auto pb-12">
+          <div className="max-w-7xl mx-auto pb-16">
 
             {renderContent()}
 
@@ -693,6 +436,7 @@ const App: React.FC = () => {
         </div>
 
       </main>
+      <Notifications isOpen={isNotificationsOpen} onClose={() => setIsNotificationsOpen(false)} />
 
     </div>
 
@@ -701,3 +445,5 @@ const App: React.FC = () => {
 };
 
 export default App;
+
+

@@ -26,28 +26,63 @@ class Menu {
   });
 
   factory Menu.fromJson(Map<String, dynamic> json) {
+    List<String> toStringList(dynamic raw) {
+      if (raw is! List) return const <String>[];
+      return raw
+          .map((item) {
+            if (item is String) return item.trim();
+            if (item is Map<String, dynamic>) return (item['name'] ?? '').toString().trim();
+            return item.toString().trim();
+          })
+          .where((value) => value.isNotEmpty)
+          .toList();
+    }
+
+    DateTime? parseDate(dynamic raw) {
+      if (raw == null) return null;
+      try {
+        return DateTime.parse(raw.toString());
+      } catch (_) {
+        return null;
+      }
+    }
+
+    final items = toStringList(json['items']);
+    final sideDishesPayload = toStringList(json['sideDishes']);
+    final fruitsPayload = toStringList(json['fruits']);
+    final drinksPayload = toStringList(json['drinks']);
+
+    final description = (json['description'] ?? json['notes'] ?? '').toString().trim();
+    final directMainDish = (json['mainDish'] ?? '').toString().trim();
+    final namedFallbackDish = (json['meal_name'] ?? json['mealName'] ?? json['name'] ?? '')
+        .toString()
+        .trim();
+    final mainDish = directMainDish.isNotEmpty
+        ? directMainDish
+        : (items.isNotEmpty
+            ? items.first
+            : (description.isNotEmpty ? description : namedFallbackDish));
+
+    final schoolRaw = json['schoolId'] ?? json['school_id'];
+    final schoolId = schoolRaw is Map<String, dynamic>
+        ? (schoolRaw['_id'] ?? schoolRaw['id'] ?? '').toString()
+        : schoolRaw?.toString() ?? '';
+    final status = (json['status'] ?? '').toString().toUpperCase();
+
     return Menu(
       id: json['id'] as String? ?? json['_id'] as String? ?? '',
-      date: json['date'] as String? ?? '',
-      mainDish: json['mainDish'] as String? ?? '',
-      sideDishes: (json['sideDishes'] as List<dynamic>?)
-          ?.map((e) => e.toString())
-          .toList() ?? [],
-      fruits: (json['fruits'] as List<dynamic>?)
-          ?.map((e) => e.toString())
-          .toList() ?? [],
-      drinks: (json['drinks'] as List<dynamic>?)
-          ?.map((e) => e.toString())
-          .toList() ?? [],
-      schoolId: json['schoolId'] as String? ?? '',
-      notes: json['notes'] as String?,
-      isAvailable: json['isAvailable'] as bool? ?? true,
-      createdAt: json['createdAt'] != null 
-          ? DateTime.parse(json['createdAt'] as String) 
-          : null,
-      updatedAt: json['updatedAt'] != null 
-          ? DateTime.parse(json['updatedAt'] as String) 
-          : null,
+      date: (json['date'] ?? '').toString(),
+      mainDish: mainDish,
+      sideDishes: sideDishesPayload.isNotEmpty
+          ? sideDishesPayload
+          : (items.length > 1 ? items.sublist(1) : const <String>[]),
+      fruits: fruitsPayload,
+      drinks: drinksPayload,
+      schoolId: schoolId,
+      notes: (json['notes'] ?? json['description'])?.toString(),
+      isAvailable: json['isAvailable'] as bool? ?? (status != 'REJECTED'),
+      createdAt: parseDate(json['createdAt'] ?? json['created_at']),
+      updatedAt: parseDate(json['updatedAt'] ?? json['updated_at']),
     );
   }
 

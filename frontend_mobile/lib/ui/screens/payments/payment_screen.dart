@@ -1,6 +1,8 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../providers/subscription_provider.dart';
 import '../../widgets/custom_button.dart';
 
 class PaymentScreen extends StatefulWidget {
@@ -24,6 +26,9 @@ class PaymentScreen extends StatefulWidget {
 class _PaymentScreenState extends State<PaymentScreen> {
   String? _selectedMethod;
   bool _isLoading = false;
+  bool _showCodeInput = false;
+  String _enteredCode = '';
+  final TextEditingController _codeController = TextEditingController();
 
   final Map<String, dynamic> _paymentMethods = {
     'ORANGE_MONEY': {
@@ -42,11 +47,17 @@ class _PaymentScreenState extends State<PaymentScreen> {
       'color': AppColors.info,
     },
     'CASH': {
-      'name': 'Espèces',
+      'name': 'Especes',
       'icon': Icons.money,
       'color': AppColors.success,
     },
   };
+
+  @override
+  void dispose() {
+    _codeController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -64,8 +75,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: AppTheme.md),
-              
-              // Montant à payer
+
               Container(
                 padding: const EdgeInsets.all(AppTheme.lg),
                 decoration: BoxDecoration(
@@ -75,41 +85,40 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 child: Column(
                   children: [
                     Text(
-                      'Montant à payer',
+                      'Montant a payer',
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: Colors.white,
-                      ),
+                            color: Colors.white,
+                          ),
                     ),
                     const SizedBox(height: AppTheme.sm),
                     Text(
                       '${widget.amount.toStringAsFixed(0)} FCFA',
                       style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                      ),
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                          ),
                     ),
                   ],
                 ),
               ),
 
               const SizedBox(height: AppTheme.xl),
-              
-              // Méthodes de paiement
+
               Text(
-                'Choisissez une méthode de paiement',
+                'Choisissez une methode de paiement',
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w600,
-                ),
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
               ),
-              
+
               const SizedBox(height: AppTheme.lg),
-              
+
               ..._paymentMethods.entries.map((entry) {
                 final method = entry.key;
                 final details = entry.value;
                 final isSelected = _selectedMethod == method;
-                
+
                 return Container(
                   margin: const EdgeInsets.only(bottom: AppTheme.md),
                   child: InkWell(
@@ -153,37 +162,35 @@ class _PaymentScreenState extends State<PaymentScreen> {
                                 Text(
                                   details['name'],
                                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    color: isSelected ? Colors.white : AppColors.textPrimary,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                                        color: isSelected ? Colors.white : AppColors.textPrimary,
+                                        fontWeight: FontWeight.w600,
+                                      ),
                                 ),
                                 const SizedBox(height: AppTheme.xs),
                                 Text(
                                   _getPaymentDescription(method),
                                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: isSelected ? Colors.white.withOpacity(0.8) : AppColors.textSecondary,
-                                  ),
+                                        color: isSelected ? Colors.white.withOpacity(0.8) : AppColors.textSecondary,
+                                      ),
                                 ),
                               ],
                             ),
                           ),
-                          if (isSelected) ...[
-                            Icon(
+                          if (isSelected)
+                            const Icon(
                               Icons.check_circle,
                               color: Colors.white,
                               size: 24,
                             ),
-                          ],
                         ],
                       ),
                     ),
                   ),
                 );
-              }).toList(),
-              
+              }),
+
               const SizedBox(height: AppTheme.xl),
-              
-              // Instructions
+
               if (_selectedMethod != null) ...[
                 Container(
                   padding: const EdgeInsets.all(AppTheme.lg),
@@ -206,9 +213,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
                           Text(
                             'Instructions',
                             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              color: AppColors.info,
-                              fontWeight: FontWeight.w600,
-                            ),
+                                  color: AppColors.info,
+                                  fontWeight: FontWeight.w600,
+                                ),
                           ),
                         ],
                       ),
@@ -216,23 +223,90 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       Text(
                         _getPaymentInstructions(_selectedMethod!),
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
+                              color: AppColors.textSecondary,
+                            ),
                       ),
                     ],
                   ),
                 ),
-                
                 const SizedBox(height: AppTheme.xl),
               ],
-              
-              // Bouton de paiement
-              CustomButton(
-                text: _selectedMethod != null ? 'Confirmer le paiement' : 'Sélectionnez une méthode',
-                onPressed: _selectedMethod != null ? () => _handlePayment() : null,
-                isLoading: _isLoading,
-                fullWidth: true,
-              ),
+
+              if (!_showCodeInput) ...[
+                CustomButton(
+                  text: _selectedMethod != null ? 'Confirmer le paiement' : 'Selectionnez une methode',
+                  onPressed: _selectedMethod != null ? () => _handlePaymentMethodSelection() : null,
+                  isLoading: _isLoading,
+                  fullWidth: true,
+                ),
+              ] else ...[
+                Container(
+                  padding: const EdgeInsets.all(AppTheme.lg),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+                    border: Border.all(color: AppColors.textTertiary.withOpacity(0.3)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Entrez votre code a 4 chiffres',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              color: AppColors.textPrimary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                      const SizedBox(height: AppTheme.md),
+                      TextField(
+                        controller: _codeController,
+                        keyboardType: TextInputType.number,
+                        maxLength: 4,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 8,
+                            ),
+                        decoration: InputDecoration(
+                          counterText: '',
+                          hintText: '1234',
+                          hintStyle: TextStyle(
+                            color: AppColors.textTertiary,
+                            letterSpacing: 8,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+                            borderSide: BorderSide(color: AppColors.textTertiary.withOpacity(0.3)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+                            borderSide: BorderSide(color: AppColors.primary, width: 2),
+                          ),
+                        ),
+                        onChanged: (value) {
+                          setState(() {
+                            _enteredCode = value;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: AppTheme.lg),
+                      CustomButton(
+                        text: 'Valider',
+                        onPressed: _enteredCode.length == 4 ? () => _handleCodeConfirmation() : null,
+                        isLoading: _isLoading,
+                        fullWidth: true,
+                      ),
+                      const SizedBox(height: AppTheme.md),
+                      CustomButton(
+                        text: 'Annuler',
+                        onPressed: () => _cancelCodeInput(),
+                        fullWidth: true,
+                        backgroundColor: AppColors.textSecondary,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -249,47 +323,135 @@ class _PaymentScreenState extends State<PaymentScreen> {
       case 'WAVE':
         return 'Paiement via Wave';
       case 'CASH':
-        return 'Paiement en espèces à l\'école';
+        return 'Paiement en especes a l ecole';
       default:
-        return 'Méthode de paiement';
+        return 'Methode de paiement';
     }
   }
 
   String _getPaymentInstructions(String method) {
     switch (method) {
       case 'ORANGE_MONEY':
-        return '1. Composez *144#* et envoyez à 12345\n2. Entrez le code reçu pour valider\n3. Gardez votre code de transaction';
       case 'MOOV_MONEY':
-        return '1. Composez *155#* et envoyez à 12345\n2. Entrez le code reçu pour valider\n3. Gardez votre code de transaction';
       case 'WAVE':
-        return '1. Scannez le code QR avec l\'application Wave\n2. Confirmez le paiement dans l\'application\n3. Le paiement sera validé instantanément';
+        return '1. Lancez le paiement mobile money\n2. Le paiement sera en attente\n3. L administration validera ensuite l abonnement';
       case 'CASH':
-        return '1. Rendez-vous à l\'administration de l\'école\n2. Présentez ce code de paiement\n3. Payez le montant en espèces\n4. Recevez une confirmation immédiate';
+        return '1. Rendez-vous a l administration\n2. Payez en especes\n3. Le paiement reste en attente jusqu a validation admin';
       default:
         return 'Instructions de paiement';
     }
   }
 
-  Future<void> _handlePayment() async {
+  Future<void> _handlePaymentMethodSelection() async {
     if (_selectedMethod == null) return;
 
+    final provider = context.read<SubscriptionProvider>();
     setState(() => _isLoading = true);
 
-    // Simuler le traitement du paiement
-    await Future.delayed(const Duration(seconds: 3));
+    final result = await provider.initiatePayment(
+      subscriptionId: widget.subscriptionId,
+      amount: widget.amount,
+      paymentMethod: _selectedMethod!,
+    );
 
     setState(() => _isLoading = false);
+    if (!mounted) return;
 
-    if (mounted) {
+    if (result['success'] != true) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Paiement simulé avec succès!'),
-          backgroundColor: AppColors.success,
+        SnackBar(
+          content: Text(result['message'] ?? 'Erreur lors de l initialisation du paiement'),
+          backgroundColor: AppColors.error,
         ),
       );
-      
-      // Retourner à l'écran précédent
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(result['message'] ?? 'Paiement initialise'),
+        backgroundColor: AppColors.info,
+      ),
+    );
+
+    final needsCode = result['codeRequired'] == true;
+
+    if (!needsCode) {
+      await provider.fetchSubscriptionsByChild(widget.childId);
+      if (!mounted) return;
+
+      if (widget.onPressed != null) {
+        widget.onPressed!();
+        return;
+      }
+
       Navigator.of(context).pop();
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+      return;
+    }
+
+    setState(() {
+      _showCodeInput = true;
+    });
+  }
+
+  void _cancelCodeInput() {
+    setState(() {
+      _showCodeInput = false;
+      _enteredCode = '';
+      _codeController.clear();
+    });
+  }
+
+  Future<void> _handleCodeConfirmation() async {
+    if (_enteredCode.length != 4 || _selectedMethod == null) return;
+
+    final provider = context.read<SubscriptionProvider>();
+    setState(() => _isLoading = true);
+
+    final result = await provider.confirmPayment(
+      // Backend confirm route uses subscription id: /subscriptions/:subscriptionId/payment/confirm
+      paymentId: widget.subscriptionId,
+      paymentMethod: _selectedMethod!,
+      code: _enteredCode,
+    );
+
+    setState(() => _isLoading = false);
+    if (!mounted) return;
+
+    if (result['success'] != true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result['message'] ?? 'Code invalide'),
+          backgroundColor: AppColors.error,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    await provider.fetchSubscriptionsByChild(widget.childId);
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(result['message'] ?? 'Paiement effectue avec succes'),
+        backgroundColor: AppColors.success,
+        duration: const Duration(seconds: 3),
+      ),
+    );
+
+    _cancelCodeInput();
+
+    if (widget.onPressed != null) {
+      widget.onPressed!();
+      return;
+    }
+
+    Navigator.of(context).pop();
+    if (Navigator.of(context).canPop()) {
       Navigator.of(context).pop();
     }
   }

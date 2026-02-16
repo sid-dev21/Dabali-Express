@@ -201,15 +201,15 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
 
   return (
 
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center font-sans">
+    <div className="min-h-screen app-shell flex items-center justify-center font-sans">
 
-      <div className="flex w-full max-w-6xl h-[800px] bg-white rounded-[40px] shadow-2xl overflow-hidden border border-slate-100 m-4 animate-in fade-in zoom-in duration-500">
+      <div className="flex w-full max-w-6xl h-[800px] surface-card overflow-hidden m-4 animate-in fade-in zoom-in duration-500">
 
         
 
         {/* Partie Gauche: Branding */}
 
-        <div className="hidden lg:flex w-5/12 bg-emerald-600 p-12 text-white flex-col justify-between relative overflow-hidden">
+        <div className="hidden lg:flex w-5/12 bg-slate-800 p-12 text-white flex-col justify-between relative overflow-hidden">
 
           <div className="absolute top-0 right-0 p-8 opacity-10">
 
@@ -229,7 +229,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
 
             <h1 className="text-4xl font-black leading-tight mb-4 text-white">Dabali Express</h1>
 
-            <p className="text-emerald-100 text-lg font-medium leading-relaxed">
+            <p className="text-white/70 text-lg font-medium leading-relaxed">
 
               La plateforme de confiance pour la gestion des cantines scolaires au Burkina Faso.
 
@@ -447,7 +447,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                       autoComplete="new-password"
                       value={emailValue}
                       onChange={(e) => setEmailValue(e.target.value)}
-                      placeholder={selectedRole === UserRole.SUPER_ADMIN ? 'admin@dabali.bf' : 'nom@domaine.bf'}
+                      placeholder={selectedRole === UserRole.SUPER_ADMIN ? 'admin@gmail.com' : 'nom@domaine.bf'}
                       className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 font-medium transition-all outline-none" 
                     />
 

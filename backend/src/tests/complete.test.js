@@ -855,7 +855,7 @@ async function runCompleteTestSuite() {
     const testSuite = require('./complete.test.js');
     // The tests will run automatically when this file is executed
   } catch (error) {
-    console.error('� Test suite failed:', error);
+    console.error('Test suite failed:', error);
     process.exit(1);
   }
 }

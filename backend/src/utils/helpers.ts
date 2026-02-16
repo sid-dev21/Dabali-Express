@@ -11,17 +11,14 @@ export const calculateEndDate = (
   const endDate = new Date(startDate);
 
   switch (type) {
-    case SubscriptionType.DAILY:
-      endDate.setDate(endDate.getDate() + 1);
-      break;
-    case SubscriptionType.WEEKLY:
-      endDate.setDate(endDate.getDate() + 7);
-      break;
     case SubscriptionType.MONTHLY:
-      endDate.setDate(endDate.getDate() + 30);
+      endDate.setMonth(endDate.getMonth() + 1);
       break;
     case SubscriptionType.TRIMESTER:
-      endDate.setDate(endDate.getDate() + 90);
+      endDate.setMonth(endDate.getMonth() + 3);
+      break;
+    case SubscriptionType.ANNUAL:
+      endDate.setFullYear(endDate.getFullYear() + 1);
       break;
   }
 

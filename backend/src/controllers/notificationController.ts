@@ -1,24 +1,50 @@
 import { Request, Response } from 'express';
+import mongoose from 'mongoose';
 import Notification from '../models/Notification';
 import { ApiResponse } from '../types';
+
+const mapNotificationResponse = (notification: any) => {
+  const obj = notification?.toObject ? notification.toObject() : notification;
+  return {
+    ...obj,
+    id: obj?._id?.toString?.() || obj?.id || '',
+    _id: obj?._id?.toString?.() || obj?._id || obj?.id || '',
+    created_at: obj?.created_at || obj?.createdAt || null,
+    createdAt: obj?.createdAt || obj?.created_at || null,
+    read: !!obj?.read,
+  };
+};
 
 // Allows to get all notifications for a user
 export const getAllNotifications = async (req: Request, res: Response): Promise<void> => {
   try {
     const user_id = req.user?.id;
-    const limit = parseInt(req.query.limit as string) || 50;
+    const rawLimit = parseInt(req.query.limit as string, 10);
+    const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 200) : 50;
     const offset = parseInt(req.query.offset as string) || 0;
+    const unreadOnly = String(req.query.unread_only || '').toLowerCase() === 'true';
 
-    const notifications = await Notification.find({ user_id })
+    if (!user_id) {
+      res.status(401).json({
+        success: false,
+        message: 'Not authenticated.'
+      } as ApiResponse);
+      return;
+    }
+
+    const query: Record<string, any> = { user_id };
+    if (unreadOnly) query.read = false;
+
+    const notifications = await Notification.find(query)
       .populate('related_student_id', 'first_name last_name')
       .populate('related_menu_id', 'date meal_type description')
-      .sort({ created_at: -1 })
+      .sort({ createdAt: -1, _id: -1 })
       .limit(limit)
       .skip(offset);
 
     res.json({
       success: true,
-      data: notifications
+      data: notifications.map(mapNotificationResponse)
     } as ApiResponse);
   } catch (error) {
     console.error('Get all notifications error:', error);
@@ -57,6 +83,13 @@ export const markAsRead = async (req: Request, res: Response): Promise<void> => 
   try {
     const { id } = req.params;
     const user_id = req.user?.id;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      res.status(400).json({
+        success: false,
+        message: 'Notification id is invalid.'
+      } as ApiResponse);
+      return;
+    }
 
     const notification = await Notification.findOneAndUpdate(
       { _id: id, user_id },
@@ -76,7 +109,7 @@ export const markAsRead = async (req: Request, res: Response): Promise<void> => 
     res.json({
       success: true,
       message: 'Notification marked as read.',
-      data: notification
+      data: mapNotificationResponse(notification)
     } as ApiResponse);
   } catch (error) {
     console.error('Mark as read error:', error);
@@ -118,6 +151,13 @@ export const deleteNotification = async (req: Request, res: Response): Promise<v
   try {
     const { id } = req.params;
     const user_id = req.user?.id;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      res.status(400).json({
+        success: false,
+        message: 'Notification id is invalid.'
+      } as ApiResponse);
+      return;
+    }
 
     const notification = await Notification.findOneAndDelete({ _id: id, user_id });
 
@@ -132,7 +172,7 @@ export const deleteNotification = async (req: Request, res: Response): Promise<v
     res.json({
       success: true,
       message: 'Notification deleted successfully.',
-      data: notification
+      data: mapNotificationResponse(notification)
     } as ApiResponse);
   } catch (error) {
     console.error('Delete notification error:', error);

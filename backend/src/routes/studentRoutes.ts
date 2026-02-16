@@ -6,6 +6,8 @@ import {
   createStudent,
   updateStudent,
   deleteStudent,
+  importStudents,
+  claimStudent,
 } from '../controllers/studentController';
 import { authMiddleware } from '../middlewares/auth';
 import { requireRole } from '../middlewares/roleCheck';
@@ -22,11 +24,17 @@ router.get('/', requireRole(UserRole.SCHOOL_ADMIN, UserRole.CANTEEN_MANAGER), ge
 // Get students by parent (PARENT only - for their own children)
 router.get('/parent/:parentId', requireRole(UserRole.PARENT), getStudentsByParent);
 
+// Bulk import students (SCHOOL_ADMIN only)
+router.post('/import', requireRole(UserRole.SCHOOL_ADMIN), importStudents);
+
+// Claim a student (PARENT only)
+router.post('/claim', requireRole(UserRole.PARENT), claimStudent);
+
 // Get student by ID (SCHOOL_ADMIN, CANTEEN_MANAGER, PARENT)
 router.get('/:id', requireRole(UserRole.SCHOOL_ADMIN, UserRole.CANTEEN_MANAGER, UserRole.PARENT), getStudentById);
 
-// Create student (SCHOOL_ADMIN only)
-router.post('/', requireRole(UserRole.SCHOOL_ADMIN), createStudent);
+// Create student (SCHOOL_ADMIN, PARENT)
+router.post('/', requireRole(UserRole.SCHOOL_ADMIN, UserRole.PARENT), createStudent);
 
 // Update student (SCHOOL_ADMIN only)
 router.put('/:id', requireRole(UserRole.SCHOOL_ADMIN), updateStudent);

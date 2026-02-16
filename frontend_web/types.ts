@@ -2,17 +2,20 @@
 export enum UserRole {
   SUPER_ADMIN = 'SUPER_ADMIN',
   SCHOOL_ADMIN = 'SCHOOL_ADMIN',
-  CANTEEN_MANAGER = 'CANTEEN_MANAGER'
+  CANTEEN_MANAGER = 'CANTEEN_MANAGER',
+  PARENT = 'PARENT'
 }
 
 export interface User {
   id: string;
   name: string;
   email: string;
+  phone?: string;
   password?: string; // Ajouté pour la gestion mockée
   role: UserRole;
   schoolId?: string;
   schoolName?: string;
+  childrenCount?: number;
   avatar?: string;
   status: 'active' | 'blocked';
   createdAt: string;
@@ -35,6 +38,8 @@ export interface Student {
   firstName: string;
   lastName: string;
   class: string;
+  studentCode?: string;
+  birthDate?: string;
   parentPhone: string;
   parentId?: string;
   schoolId: string;
@@ -45,12 +50,22 @@ export interface Student {
 export interface MenuItem {
   id: string;
   schoolId: string;
-  day: 'Lundi' | 'Mardi' | 'Mercredi' | 'Jeudi' | 'Vendredi';
-  mealName: string;
-  description: string;
-  calories?: string;
   date?: string;
-  mealType?: string;
+  mealType?: 'BREAKFAST' | 'LUNCH' | 'DINNER';
+  name?: string;
+  items?: Array<{ name: string; emoji?: string }>;
+  allergens?: string[];
+  status?: 'PENDING' | 'APPROVED' | 'REJECTED';
+  rejection_reason?: string;
+  annual_key?: string;
+  is_annual?: boolean;
+  schoolName?: string;
+  school_name?: string;
+  // Champs hérités pour compatibilité
+  day?: 'Lundi' | 'Mardi' | 'Mercredi' | 'Jeudi' | 'Vendredi';
+  mealName?: string;
+  description?: string;
+  calories?: string;
 }
 
 export interface Payment {
@@ -61,7 +76,8 @@ export interface Payment {
   amount: number;
   date: string;
   method: 'CASH' | 'ORANGE_MONEY' | 'MOOV_MONEY';
-  status: 'completed' | 'pending';
+  status: 'completed' | 'pending' | 'failed';
+  rawStatus?: 'PENDING' | 'COMPLETED' | 'FAILED' | 'REFUNDED' | 'WAITING_ADMIN_VALIDATION' | string;
 }
 
 export interface SystemSettings {
@@ -76,3 +92,4 @@ export interface LoginResponse<T = JSON> {
   message?: string;
   data?: T;
 }
+

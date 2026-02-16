@@ -4,9 +4,12 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/api_constants.dart';
+import '../../../data/models/school_model.dart';
+import '../../../data/services/api_service.dart';
 import '../../widgets/modern_text_field.dart';
 import '../../widgets/modern_button.dart';
-import '../home/home_screen.dart';
+import '../main_shell.dart';
 import 'login_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -29,14 +32,60 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _isLoading = false;
-  String? _selectedSchool;
+  String? _selectedSchoolId;
+  bool _isLoadingSchools = false;
+  String? _schoolsError;
 
-  final List<String> _schools = [
-    'Lycée Philippe Zinda Kaboré',
-    'Groupe Scolaire Horizon',
-    'École Primaire de Bobo',
-    'Collège de Koudougou',
-  ];
+  final List<SchoolModel> _schools = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSchools();
+  }
+
+  Future<void> _loadSchools() async {
+    setState(() {
+      _isLoadingSchools = true;
+      _schoolsError = null;
+    });
+
+    try {
+      final response = await ApiService().get(ApiConstants.publicSchools);
+      final data = response.data;
+      if (data is Map<String, dynamic> && data['success'] == true) {
+        final list = (data['data'] as List<dynamic>? ?? [])
+            .map((item) => SchoolModel.fromJson(item as Map<String, dynamic>))
+            .toList();
+
+        if (mounted) {
+          setState(() {
+            _schools
+              ..clear()
+              ..addAll(list);
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _schoolsError = data is Map<String, dynamic> ? (data['message'] as String? ?? 'Erreur de chargement des écoles') : 'Erreur de chargement des écoles';
+          });
+        }
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _schoolsError = 'Impossible de charger la liste des écoles';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingSchools = false;
+        });
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -85,7 +134,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
         );
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const HomeScreen()),
+          MaterialPageRoute(builder: (context) => const MainShell()),
         );
       }
     } else {
@@ -252,10 +301,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         boxShadow: AppColors.cardShadow,
                       ),
                       child: DropdownButtonFormField<String>(
-                        value: _selectedSchool,
+                        value: _selectedSchoolId,
                         decoration: InputDecoration(
                           labelText: 'École',
-                          hintText: 'Sélectionner une école',
+                          hintText: _isLoadingSchools ? 'Chargement...' : 'Sélectionner une école',
                           prefixIcon: const Icon(Icons.school_outlined, color: AppColors.textTertiary),
                           border: InputBorder.none,
                           contentPadding: const EdgeInsets.symmetric(
@@ -274,9 +323,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ),
                         items: _schools.map((school) {
                           return DropdownMenuItem<String>(
-                            value: school,
+                            value: school.id,
                             child: Text(
-                              school,
+                              school.name,
                               style: GoogleFonts.inter(
                                 color: AppColors.textPrimary,
                                 fontSize: 14,
@@ -284,13 +333,32 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             ),
                           );
                         }).toList(),
+                        onTap: () {
+                          if (_schools.isEmpty && !_isLoadingSchools) {
+                            _loadSchools();
+                          }
+                        },
                         onChanged: (value) {
                           setState(() {
-                            _selectedSchool = value;
-                            _schoolController.text = value ?? '';
+                            _selectedSchoolId = value;
+                            final selected = _schools.firstWhere(
+                              (school) => school.id == value,
+                              orElse: () => SchoolModel(
+                                id: '',
+                                name: '',
+                                address: '',
+                                city: '',
+                                studentCount: 0,
+                                status: 'inactive',
+                              ),
+                            );
+                            _schoolController.text = selected.name;
                           });
                         },
                         validator: (value) {
+                          if (_schools.isEmpty) {
+                            return _schoolsError ?? 'Aucune école disponible';
+                          }
                           if (value == null || value.isEmpty) {
                             return 'Veuillez sélectionner une école';
                           }
@@ -390,7 +458,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             style: GoogleFonts.inter(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
-                              color: AppColors.primary,
+                              color: AppColors.secondaryDark,
                             ),
                           ),
                         ),
@@ -406,3 +474,5 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 }
+
+

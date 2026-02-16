@@ -7,7 +7,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../widgets/modern_text_field.dart';
 import '../../widgets/modern_button.dart';
 import 'register_screen.dart';
-import '../home/home_screen.dart';
+import '../main_shell.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -45,7 +45,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (success && mounted) {
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        MaterialPageRoute(builder: (_) => const MainShell()),
       );
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -211,7 +211,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           style: GoogleFonts.inter(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
-                            color: AppColors.primary,
+                            color: AppColors.secondaryDark,
                           ),
                         ),
                       ),
@@ -257,7 +257,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             style: GoogleFonts.inter(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
-                              color: AppColors.primary,
+                              color: AppColors.secondaryDark,
                             ),
                           ),
                         ),

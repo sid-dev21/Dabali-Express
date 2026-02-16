@@ -19,6 +19,7 @@ const schoolAdminOnly = requireRole(UserRole.SCHOOL_ADMIN);
 
 // Get all users (SUPER_ADMIN only)
 router.get('/', superAdminOnly, userController.getAllUsers);
+router.post('/', superAdminOnly, userController.createUser);
 
 // Get user by ID (SUPER_ADMIN only)
 router.get('/:id', superAdminOnly, userController.getUserById);
@@ -28,6 +29,7 @@ router.put('/:id', superAdminOnly, userController.updateUser);
 
 // Delete user (SUPER_ADMIN only)
 router.delete('/:id', superAdminOnly, userController.deleteUser);
+router.delete('/:id/delete', superAdminOnly, userController.deleteUser);
 
 // === CANTEEN MANAGER MANAGEMENT ROUTES ===
 

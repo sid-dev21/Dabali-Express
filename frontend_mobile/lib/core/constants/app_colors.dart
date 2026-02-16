@@ -1,52 +1,65 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  // Couleurs principales basées sur le design moderne demandé
-  static const Color primary = Color(0xFF059669); // Emerald 600 - CTA buttons (vert du web)
-  static const Color secondary = Color(0xFF10B981); // Emerald 500 - actions secondaires
-  static const Color danger = Color(0xFFEF4444); // Red 500
-  static const Color info = Color(0xFF3B82F6); // Blue 500
-  
-  // Couleurs neutres
-  static const Color background = Color(0xFFF9FAFB); // gray-50
-  static const Color surface = Colors.white;
-  static const Color card = Colors.white;
-  
-  // Couleurs de texte
-  static const Color textPrimary = Color(0xFF111827); // gray-900
-  static const Color textSecondary = Color(0xFF4B5563); // gray-600
-  static const Color textTertiary = Color(0xFF9CA3AF); // gray-400
-  
-  // Couleurs de statut
-  static const Color success = Color(0xFF10B981); // Emerald 500
-  static const Color warning = Color(0xFFF59E0B); // Amber 500
-  static const Color error = Color(0xFFEF4444); // Red 500
-  
-  // Méthodes de paiement
+  // Brand colors aligned with web palette
+  static const Color primary = Color(0xFF2B2A27);
+  static const Color primaryDark = Color(0xFF1F1E1B);
+  static const Color secondary = Color(0xFFC9A227);
+  static const Color secondaryDark = Color(0xFFB08B1B);
+
+  // Semantic colors
+  static const Color danger = Color(0xFFDC2626);
+  static const Color info = Color(0xFF0F766E);
+  static const Color success = secondary;
+  static const Color warning = Color(0xFFF2901C);
+  static const Color error = danger;
+
+  // Neutral colors
+  static const Color background = Color(0xFFF7F4EF);
+  static const Color surface = Color(0xFFFFFDFA);
+  static const Color surfaceAlt = Color(0xFFF4EFE7);
+  static const Color card = surface;
+  static const Color border = Color(0xFFE3DDD3);
+
+  // Text colors
+  static const Color textPrimary = Color(0xFF2B2A27);
+  static const Color textStrong = Color(0xFF1D1B18);
+  static const Color textSecondary = Color(0xFF7B746D);
+  static const Color textTertiary = Color(0xFFA39C94);
+
+  // Payment method colors
   static const Color orangeMoney = Color(0xFFFF6600);
   static const Color moovMoney = Color(0xFF00A8E1);
-  
+
   // Gradients
   static const LinearGradient primaryGradient = LinearGradient(
-    colors: [primary, Color(0xFF047857)], // Emerald 600 à Emerald 700
+    colors: [primary, primaryDark],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
-  
-  // Ombres
+
+  static const LinearGradient secondaryGradient = LinearGradient(
+    colors: [secondary, secondaryDark],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  // Shadows
   static List<BoxShadow> get cardShadow => [
-    BoxShadow(
-      color: Colors.black.withOpacity(0.05),
-      blurRadius: 10,
-      offset: const Offset(0, 2),
-    ),
-  ];
-  
+        BoxShadow(
+          color: const Color(0xFF1D1B18).withOpacity(0.14),
+          blurRadius: 26,
+          spreadRadius: -18,
+          offset: const Offset(0, 12),
+        ),
+      ];
+
   static List<BoxShadow> get buttonShadow => [
-    BoxShadow(
-      color: primary.withOpacity(0.3),
-      blurRadius: 8,
-      offset: const Offset(0, 4),
-    ),
-  ];
+        BoxShadow(
+          color: secondary.withOpacity(0.32),
+          blurRadius: 24,
+          spreadRadius: -12,
+          offset: const Offset(0, 10),
+        ),
+      ];
 }

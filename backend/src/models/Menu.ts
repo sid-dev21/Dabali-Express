@@ -12,6 +12,8 @@ export interface IMenu extends Document {
   approved_by?: mongoose.Types.ObjectId;
   approved_at?: Date;
   rejection_reason?: string;
+  annual_key?: string;
+  is_annual?: boolean;
   created_at: Date;
   updated_at: Date;
   // Additional fields from API joins
@@ -31,7 +33,9 @@ const MenuSchema = new Schema<IMenu>({
   created_by: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   approved_by: { type: Schema.Types.ObjectId, ref: 'User' },
   approved_at: Date,
-  rejection_reason: String
+  rejection_reason: String,
+  annual_key: String,
+  is_annual: { type: Boolean, default: false }
 }, { timestamps: true });
 
 export default mongoose.model<IMenu>('Menu', MenuSchema);

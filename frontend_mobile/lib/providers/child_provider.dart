@@ -34,12 +34,23 @@ class ChildProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  String _formatError(dynamic error, String fallback) {
+    final raw = error.toString().trim();
+    if (raw.isEmpty) return fallback;
+    if (raw.startsWith('Exception:')) {
+      final cleaned = raw.substring('Exception:'.length).trim();
+      return cleaned.isEmpty ? fallback : cleaned;
+    }
+    return raw;
+  }
+
   // ===== ADD CHILD =====
   Future<bool> addChild({
     required String firstName,
     required String lastName,
     required String dateOfBirth,
     required String className,
+    String? studentCode,
     String? schoolId,
   }) async {
     _isLoading = true;
@@ -52,6 +63,7 @@ class ChildProvider with ChangeNotifier {
         lastName: lastName,
         dateOfBirth: dateOfBirth,
         className: className,
+        studentCode: studentCode,
         schoolId: schoolId,
       );
 
@@ -67,7 +79,7 @@ class ChildProvider with ChangeNotifier {
         return false;
       }
     } catch (e) {
-      _errorMessage = 'Erreur lors de l\'ajout de l\'enfant: $e';
+      _errorMessage = _formatError(e, 'Erreur lors de l\'ajout de l\'enfant');
       _isLoading = false;
       notifyListeners();
       return false;

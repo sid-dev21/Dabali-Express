@@ -100,20 +100,11 @@ const MenuApproval: React.FC<MenuApprovalProps> = ({ isOpen, onClose, onMenuAppr
     });
   };
 
-  const getMealTypeLabel = (mealType: string) => {
-    switch (mealType) {
-      case 'BREAKFAST': return 'Petit-déjeuner';
-      case 'LUNCH': return 'Déjeuner';
-      case 'DINNER': return 'Dîner';
-      default: return mealType;
-    }
-  };
-
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
-      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-xl">
+      <div className="surface-card w-full max-w-4xl max-h-[90vh] overflow-hidden">
         <div className="p-6 border-b flex justify-between items-center">
           <div className="flex items-center gap-2">
             <Clock className="w-5 h-5 text-orange-500" />
@@ -150,7 +141,7 @@ const MenuApproval: React.FC<MenuApprovalProps> = ({ isOpen, onClose, onMenuAppr
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex items-center gap-3">
                       <div className="bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-sm font-medium">
-                        {getMealTypeLabel(menu.meal_type)}
+                        Menu du jour
                       </div>
                       <div className="flex items-center gap-1 text-sm text-gray-500">
                         <Calendar className="w-4 h-4" />
@@ -164,11 +155,22 @@ const MenuApproval: React.FC<MenuApprovalProps> = ({ isOpen, onClose, onMenuAppr
 
                   <div className="mb-3">
                     <h4 className="font-medium text-gray-900 mb-1">
-                      {menu.description || 'Menu non spécifié'}
+                      {menu.meal_name || menu.description || 'Menu non spécifié'}
                     </h4>
+                    {menu.description && menu.meal_name && (
+                      <p className="text-sm text-gray-500 mb-1">{menu.description}</p>
+                    )}
                     {menu.items && menu.items.length > 0 && (
                       <div className="text-sm text-gray-600">
-                        <strong>Plats:</strong> {menu.items.join(', ')}
+                        <strong>Plats:</strong>{' '}
+                        {menu.items
+                          .map((item: any) => {
+                            if (typeof item === 'string') return item;
+                            const emoji = item?.emoji ? `${item.emoji} ` : '';
+                            return `${emoji}${item?.name || ''}`.trim();
+                          })
+                          .filter(Boolean)
+                          .join(', ')}
                       </div>
                     )}
                     {menu.allergens && menu.allergens.length > 0 && (
@@ -222,7 +224,7 @@ const MenuApproval: React.FC<MenuApprovalProps> = ({ isOpen, onClose, onMenuAppr
       {/* Rejection Dialog */}
       {showRejectionDialog && selectedMenu && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-60 flex items-center justify-center">
-          <div className="bg-white rounded-lg w-full max-w-md p-6 shadow-xl">
+          <div className="surface-card w-full max-w-md p-6">
             <div className="flex items-center gap-2 mb-4">
               <AlertCircle className="w-5 h-5 text-red-500" />
               <h3 className="text-lg font-semibold">Rejeter le Menu</h3>
@@ -230,7 +232,7 @@ const MenuApproval: React.FC<MenuApprovalProps> = ({ isOpen, onClose, onMenuAppr
             
             <div className="mb-4">
               <p className="text-sm text-gray-600 mb-2">
-                Menu: <strong>{selectedMenu.description}</strong> ({getMealTypeLabel(selectedMenu.meal_type)})
+                Menu: <strong>{selectedMenu.meal_name || selectedMenu.description}</strong>
               </p>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Raison du rejet <span className="text-red-500">*</span>

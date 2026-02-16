@@ -1,5 +1,3 @@
-
-
 import React from 'react';
 
 import { 
@@ -22,7 +20,13 @@ import {
 
   Calendar,
 
-  UserPlus
+  UserPlus,
+
+  Archive,
+
+  FileText,
+
+  History
 
 } from 'lucide-react';
 
@@ -31,14 +35,10 @@ import { UserRole, Student, School } from './types';
 
 
 export const COLORS = {
-
-  primary: '#059669', // Emerald 600
-
-  secondary: '#d97706', // Amber 600
-
+  primary: '#2b2a27',
+  secondary: '#c9a227',
   danger: '#dc2626', // Red 600
-
-  info: '#2563eb', // Blue 600
+  info: '#0f766e', // Teal 700
 };
 
 
@@ -48,11 +48,15 @@ export const NAV_ITEMS = [
   { id: 'schools', label: 'Écoles', icon: <SchoolIcon size={20} />, roles: [UserRole.SUPER_ADMIN] },
   { id: 'users', label: 'Utilisateurs', icon: <Users size={20} />, roles: [UserRole.SUPER_ADMIN] },
   { id: 'canteen-managers', label: 'Gestionnaires', icon: <UserPlus size={20} />, roles: [UserRole.SCHOOL_ADMIN] },
-  { id: 'students', label: 'Élèves', icon: <UserCircle size={20} />, roles: [UserRole.SCHOOL_ADMIN, UserRole.CANTEEN_MANAGER] },
-  { id: 'menus', label: 'Menus', icon: <Utensils size={20} />, roles: [UserRole.SCHOOL_ADMIN, UserRole.CANTEEN_MANAGER] },
-  { id: 'subscriptions', label: 'Abonnements', icon: <Calendar size={20} />, roles: [UserRole.SCHOOL_ADMIN, UserRole.CANTEEN_MANAGER] },
-  { id: 'payments', label: 'Paiements', icon: <CreditCard size={20} />, roles: [UserRole.SCHOOL_ADMIN, UserRole.CANTEEN_MANAGER] },
-  { id: 'attendance', label: 'Présences', icon: <CheckCircle size={20} />, roles: [UserRole.CANTEEN_MANAGER, UserRole.SCHOOL_ADMIN] },
+  { id: 'students', label: 'Élèves', icon: <UserCircle size={20} />, roles: [UserRole.SCHOOL_ADMIN] },
+  { id: 'menus', label: 'Menus', icon: <Utensils size={20} />, roles: [UserRole.SCHOOL_ADMIN, UserRole.CANTEEN_MANAGER, UserRole.SUPER_ADMIN] },
+  { id: 'stock', label: 'Stock', icon: <Archive size={20} />, roles: [UserRole.CANTEEN_MANAGER] },
+  { id: 'canteen-history', label: 'Historique', icon: <History size={20} />, roles: [UserRole.CANTEEN_MANAGER] },
+  { id: 'canteen-reports', label: 'Rapports cantine', icon: <FileText size={20} />, roles: [UserRole.SCHOOL_ADMIN] },
+  { id: 'school-admin-reports', label: 'Rapports écoles', icon: <FileText size={20} />, roles: [UserRole.SUPER_ADMIN] },
+  { id: 'subscriptions', label: 'Abonnements', icon: <Calendar size={20} />, roles: [UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN] },
+  { id: 'payments', label: 'Paiements', icon: <CreditCard size={20} />, roles: [UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN] },
+  { id: 'attendance', label: 'Présences', icon: <CheckCircle size={20} />, roles: [UserRole.CANTEEN_MANAGER] },
   { id: 'settings', label: 'Paramètres', icon: <Settings size={20} />, roles: [UserRole.SUPER_ADMIN, UserRole.SCHOOL_ADMIN, UserRole.CANTEEN_MANAGER] },
 ];
 

@@ -37,8 +37,10 @@ export interface MenuItem {
   school_id: number;
   date: string;
   meal_type: string;
+  meal_name?: string;
+  name?: string;
   description?: string;
-  items?: string[];
+  items?: Array<{ name: string; emoji?: string }>;
   allergens?: string[];
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   created_by: number;
@@ -54,8 +56,9 @@ export interface MenuItem {
 }
 
 export interface Notification {
-  id: number;
-  user_id: number;
+  id: string | number;
+  _id?: string;
+  user_id: string | number;
   title: string;
   message: string;
   type: 'MEAL_TAKEN' | 'MEAL_MISSED' | 'MENU_APPROVED' | 'MENU_REJECTED' | 'ABSENCE';
@@ -75,10 +78,14 @@ export interface Payment {
   parent_id: number;
   amount: number;
   method: string;
-  status: string;
+  status: 'PENDING' | 'COMPLETED' | 'FAILED' | 'REFUNDED' | 'WAITING_ADMIN_VALIDATION';
   reference?: string;
+  verification_code?: string;
   paid_at?: string;
   created_at: string;
+  studentName?: string;
+  schoolId?: string;
+  date?: string;
 }
 
 export interface LoginResponse {

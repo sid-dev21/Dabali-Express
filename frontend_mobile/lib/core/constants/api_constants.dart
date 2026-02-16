@@ -19,17 +19,19 @@ class ApiConstants {
   // Auth Endpoints
   static const String login = '/auth/login';
   static const String register = '/auth/register';
-  static const String profile = '/auth/profile';
-  static const String refresh = '/auth/refresh';
+  static const String profile = '/auth/me';
+  static const String updateCredentials = '/auth/update-credentials';
+  static const String refresh = '/auth/refresh-token';
   
   // Children Endpoints
-  static const String children = '/children';
-  static const String addChild = '/children';
-  static String childDetails(String childId) => '/children/$childId';
-  static String childrenByParent(String parentId) => '/children/parent/$parentId';
+  static const String children = '/students';
+  static const String addChild = '/students';
+  static String childDetails(String childId) => '/students/$childId';
+  static String childrenByParent(String parentId) => '/students/parent/$parentId';
   
   // Schools Endpoints
   static const String schools = '/schools';
+  static const String publicSchools = '/schools/public';
   
   // Subscriptions Endpoints
   static const String subscriptions = '/subscriptions';
@@ -39,7 +41,8 @@ class ApiConstants {
   
   // Payments Endpoints
   static const String payments = '/payments';
-  static const String initiatePayment = '/payments/initiate';
+  static String initiatePayment(String subscriptionId) => '/subscriptions/$subscriptionId/payment';
+  static String confirmSubscriptionPayment(String subscriptionId) => '/subscriptions/$subscriptionId/payment/confirm';
   static String paymentStatus(String paymentId) => '/payments/$paymentId';
   static String verifyPayment(String paymentId) => '/payments/$paymentId/verify';
   

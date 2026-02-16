@@ -317,6 +317,203 @@ export const getCurrentUser = async (req: Request, res: Response): Promise<void>
 };
 
 /**
+ * POST /api/auth/update-credentials
+ * Allows an authenticated user to update email and/or password.
+ * The current password is required to secure the operation.
+ */
+export const updateCredentials = async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!req.user?.id) {
+      res.status(401).json({
+        success: false,
+        message: 'Not authenticated.',
+      } as ApiResponse);
+      return;
+    }
+
+    const {
+      current_password,
+      new_email,
+      new_password,
+      confirm_new_password,
+    }: {
+      current_password?: string;
+      new_email?: string;
+      new_password?: string;
+      confirm_new_password?: string;
+    } = req.body;
+
+    const normalizedCurrentPassword = typeof current_password === 'string' ? current_password : '';
+    const normalizedNewEmail = typeof new_email === 'string' ? new_email.trim().toLowerCase() : '';
+    const normalizedNewPassword = typeof new_password === 'string' ? new_password : '';
+    const normalizedConfirmNewPassword =
+      typeof confirm_new_password === 'string' ? confirm_new_password : '';
+
+    const wantsEmailChange = new_email !== undefined;
+    const wantsPasswordChange =
+      new_password !== undefined || confirm_new_password !== undefined;
+
+    if (!normalizedCurrentPassword) {
+      res.status(400).json({
+        success: false,
+        message: 'Current password is required.',
+      } as ApiResponse);
+      return;
+    }
+
+    if (!wantsEmailChange && !wantsPasswordChange) {
+      res.status(400).json({
+        success: false,
+        message: 'Provide new_email and/or new_password to update credentials.',
+      } as ApiResponse);
+      return;
+    }
+
+    if (wantsEmailChange) {
+      if (!normalizedNewEmail || !isValidEmail(normalizedNewEmail)) {
+        res.status(400).json({
+          success: false,
+          message: 'Invalid email format.',
+        } as ApiResponse);
+        return;
+      }
+    }
+
+    if (wantsPasswordChange) {
+      if (!normalizedNewPassword || !normalizedConfirmNewPassword) {
+        res.status(400).json({
+          success: false,
+          message: 'Both new password fields are required.',
+        } as ApiResponse);
+        return;
+      }
+
+      if (normalizedNewPassword !== normalizedConfirmNewPassword) {
+        res.status(400).json({
+          success: false,
+          message: 'New password and confirmation do not match.',
+        } as ApiResponse);
+        return;
+      }
+
+      if (!isValidPassword(normalizedNewPassword)) {
+        res.status(400).json({
+          success: false,
+          message: 'Password must contain at least 8 characters, 1 uppercase, 1 lowercase and 1 digit.',
+        } as ApiResponse);
+        return;
+      }
+    }
+
+    const user = await User.findById(req.user.id).select('+password');
+    if (!user) {
+      res.status(404).json({
+        success: false,
+        message: 'User not found.',
+      } as ApiResponse);
+      return;
+    }
+
+    const isCurrentPasswordValid = await comparePassword(normalizedCurrentPassword, user.password);
+    if (!isCurrentPasswordValid) {
+      res.status(400).json({
+        success: false,
+        message: 'Current password is incorrect.',
+      } as ApiResponse);
+      return;
+    }
+
+    const updates: {
+      email?: string;
+      password?: string;
+      is_temporary_password?: boolean;
+      password_changed_at?: Date;
+    } = {};
+
+    if (wantsEmailChange && normalizedNewEmail !== user.email) {
+      const existingUser = await User.findOne({
+        email: normalizedNewEmail,
+        _id: { $ne: user._id },
+      });
+
+      if (existingUser) {
+        res.status(409).json({
+          success: false,
+          message: 'This email is already in use.',
+        } as ApiResponse);
+        return;
+      }
+
+      updates.email = normalizedNewEmail;
+    }
+
+    if (wantsPasswordChange) {
+      const isSamePassword = await comparePassword(normalizedNewPassword, user.password);
+      if (isSamePassword) {
+        res.status(400).json({
+          success: false,
+          message: 'New password must be different from current password.',
+        } as ApiResponse);
+        return;
+      }
+
+      updates.password = await hashPassword(normalizedNewPassword);
+      updates.is_temporary_password = false;
+      updates.password_changed_at = new Date();
+    }
+
+    if (Object.keys(updates).length === 0) {
+      res.status(400).json({
+        success: false,
+        message: 'No effective changes detected.',
+      } as ApiResponse);
+      return;
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(req.user.id, updates, {
+      new: true,
+      runValidators: true,
+    }).populate('school_id');
+
+    if (!updatedUser) {
+      res.status(404).json({
+        success: false,
+        message: 'User not found.',
+      } as ApiResponse);
+      return;
+    }
+
+    const { schoolId, schoolName } = await resolveSchoolInfo(updatedUser);
+    const refreshedToken = generateToken({
+      id: updatedUser._id.toString(),
+      email: updatedUser.email,
+      role: updatedUser.role as UserRole,
+    });
+
+    const userObject = updatedUser.toObject();
+    const { password: _, ...userWithoutPassword } = userObject;
+
+    res.status(200).json({
+      success: true,
+      message: 'Credentials updated successfully.',
+      token: refreshedToken,
+      data: {
+        ...userWithoutPassword,
+        _id: updatedUser._id.toString(),
+        schoolId,
+        schoolName,
+      },
+    } as ApiResponse);
+  } catch (error) {
+    console.error('Update credentials error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error updating credentials.',
+    } as ApiResponse);
+  }
+};
+
+/**
  * POST /api/auth/register-school-admin
  * Allows SUPER_ADMIN to create a SCHOOL_ADMIN with associated school
  * Automatically generates email and password if not provided
@@ -537,7 +734,15 @@ export const changeTemporaryPassword = async (req: Request, res: Response): Prom
     const { current_password, new_password, confirm_password } = req.body;
     
     // Type assertion pour éviter l'erreur TypeScript
-    const userId = (req.user as any)._id;
+    const userId = req.user?.id || (req.user as any)?._id;
+
+    if (!userId) {
+      res.status(401).json({
+        success: false,
+        message: 'Not authenticated.',
+      } as ApiResponse);
+      return;
+    }
 
     // Validation
     if (!current_password || !new_password || !confirm_password) {

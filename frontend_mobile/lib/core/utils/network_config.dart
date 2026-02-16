@@ -23,8 +23,8 @@ class NetworkConfig {
   static const String auth = '/auth';
   static const String register = '/auth/register';
   static const String login = '/auth/login';
-  static const String profile = '/auth/profile';
-  static const String refresh = '/auth/refresh';
+  static const String profile = '/auth/me';
+  static const String refresh = '/auth/refresh-token';
   
   static const String children = '/children';
   static const String addChild = '/children';

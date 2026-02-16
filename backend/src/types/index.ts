@@ -13,10 +13,9 @@ export enum UserRole {
 }
 
 export enum SubscriptionType {
-  DAILY = 'DAILY',
-  WEEKLY = 'WEEKLY',
   MONTHLY = 'MONTHLY',
   TRIMESTER = 'TRIMESTER',
+  ANNUAL = 'ANNUAL',
 }
 
 export enum SubscriptionStatus {
@@ -93,10 +92,13 @@ export interface Student {
   first_name: string;
   last_name: string;
   class_name?: string;
+  student_code?: string;
+  birth_date?: Date;
   school_id: string | ObjectId;
-  parent_id: string | ObjectId;
+  parent_id?: string | ObjectId;
   photo_url?: string;
   allergies?: string[];
+  claimed_at?: Date;
   created_at: Date;
   updated_at: Date;
 }
@@ -115,6 +117,8 @@ export interface Menu {
   approved_by?: string | ObjectId;
   approved_at?: Date;
   rejection_reason?: string;
+  annual_key?: string;
+  is_annual?: boolean;
   created_at: Date;
   updated_at: Date;
 }
@@ -200,7 +204,9 @@ export interface CreateStudentDTO {
   last_name: string;
   class_name?: string;
   school_id: string;
-  parent_id: string;
+  parent_id?: string;
+  student_code?: string;
+  birth_date?: string;
   photo_url?: string;
   allergies?: string[];
 }
@@ -231,6 +237,7 @@ export interface CreatePaymentDTO {
   amount: number;
   method: PaymentMethod;
   phone?: string; // For mobile money payments
+  reference?: string;
 }
 
 export interface MarkAttendanceDTO {

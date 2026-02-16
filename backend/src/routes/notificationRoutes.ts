@@ -4,7 +4,8 @@ import {
   getAllNotifications,
   markAsRead,
   markAllAsRead,
-  getUnreadCount
+  getUnreadCount,
+  deleteNotification
 } from '../controllers/notificationController';
 
 const router = Router();
@@ -39,5 +40,12 @@ router.put('/:id/read', markAsRead);
  * @access  Private
  */
 router.put('/read-all', markAllAsRead);
+
+/**
+ * @route   DELETE /api/notifications/:id
+ * @desc    Delete a notification for the authenticated user
+ * @access  Private
+ */
+router.delete('/:id', deleteNotification);
 
 export default router;

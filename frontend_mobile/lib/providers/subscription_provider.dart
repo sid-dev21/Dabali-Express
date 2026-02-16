@@ -213,6 +213,80 @@ class SubscriptionProvider with ChangeNotifier {
     await fetchSubscriptions();
   }
 
+  // ===== INITIATE PAYMENT =====
+  Future<Map<String, dynamic>> initiatePayment({
+    required String subscriptionId,
+    required double amount,
+    required String paymentMethod,
+  }) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final result = await _subscriptionRepository.initiatePayment(
+        subscriptionId: subscriptionId,
+        amount: amount,
+        paymentMethod: paymentMethod,
+      );
+
+      if (result['success'] == true && result['subscription'] != null) {
+        _upsertSubscription(result['subscription'] as SubscriptionModel);
+      } else if (result['success'] != true) {
+        _errorMessage = result['message'] ?? 'Erreur lors de l initiation du paiement';
+      }
+
+      _isLoading = false;
+      notifyListeners();
+      return result;
+    } catch (e) {
+      _errorMessage = 'Erreur lors de l initiation du paiement: $e';
+      _isLoading = false;
+      notifyListeners();
+      return {
+        'success': false,
+        'message': _errorMessage,
+      };
+    }
+  }
+
+  // ===== CONFIRM PAYMENT =====
+  Future<Map<String, dynamic>> confirmPayment({
+    required String paymentId,
+    required String paymentMethod,
+    required String code,
+  }) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final result = await _subscriptionRepository.confirmPayment(
+        paymentId: paymentId,
+        paymentMethod: paymentMethod,
+        code: code,
+      );
+
+      if (result['success'] == true && result['subscription'] != null) {
+        _upsertSubscription(result['subscription'] as SubscriptionModel);
+      } else if (result['success'] != true) {
+        _errorMessage = result['message'] ?? 'Erreur lors de la confirmation du paiement';
+      }
+
+      _isLoading = false;
+      notifyListeners();
+      return result;
+    } catch (e) {
+      _errorMessage = 'Erreur lors de la confirmation du paiement: $e';
+      _isLoading = false;
+      notifyListeners();
+      return {
+        'success': false,
+        'message': _errorMessage,
+      };
+    }
+  }
+
   // ===== CLEAR ERROR =====
   void clearError() {
     _errorMessage = null;
@@ -256,9 +330,9 @@ class SubscriptionProvider with ChangeNotifier {
       case SubscriptionType.monthly:
         return basePrice;
       case SubscriptionType.quarterly:
-        return basePrice * 3 * 0.9; // 10% de réduction
+        return 15000; // 10% de réduction
       case SubscriptionType.yearly:
-        return basePrice * 12 * 0.8; // 20% de réduction
+        return 50000; // 20% de réduction
     }
   }
 
@@ -272,5 +346,14 @@ class SubscriptionProvider with ChangeNotifier {
       sub.statusDisplayName.toLowerCase().contains(lowerQuery) ||
       sub.childId.toLowerCase().contains(lowerQuery)
     ).toList();
+  }
+
+  void _upsertSubscription(SubscriptionModel subscription) {
+    final index = _subscriptions.indexWhere((sub) => sub.id == subscription.id);
+    if (index == -1) {
+      _subscriptions.add(subscription);
+    } else {
+      _subscriptions[index] = subscription;
+    }
   }
 }

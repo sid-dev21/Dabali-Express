@@ -1,9 +1,12 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../providers/child_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/api_constants.dart';
+import '../../../data/models/school_model.dart';
+import '../../../data/services/api_service.dart';
 import '../../widgets/modern_button.dart';
 import '../../widgets/modern_text_field.dart';
 
@@ -20,24 +23,99 @@ class _AddChildScreenState extends State<AddChildScreen> {
   final _lastNameController = TextEditingController();
   final _dateOfBirthController = TextEditingController();
   final _classNameController = TextEditingController();
+  final _studentCodeController = TextEditingController();
   final _schoolController = TextEditingController();
 
   bool _isLoading = false;
-  String? _selectedSchool;
+  String? _selectedSchoolId;
+  bool _isLoadingSchools = false;
+  String? _schoolsError;
 
-  final List<String> _schools = [
-    'Lycée Philippe Zinda Kaboré',
-    'Groupe Scolaire Horizon',
-    'École Primaire de Bobo',
-    'Collège de Koudougou',
-  ];
+  final List<SchoolModel> _schools = [];
 
+  @override
+  void initState() {
+    super.initState();
+    _loadSchools();
+  }
+
+  Future<void> _loadSchools() async {
+    setState(() {
+      _isLoadingSchools = true;
+      _schoolsError = null;
+    });
+
+    try {
+      final response = await ApiService().get(ApiConstants.publicSchools);
+      final data = response.data;
+      if (data is Map<String, dynamic> && data['success'] == true) {
+        final list = (data['data'] as List<dynamic>? ?? [])
+            .map((item) => SchoolModel.fromJson(item as Map<String, dynamic>))
+            .toList();
+
+        if (mounted) {
+          setState(() {
+            _schools
+              ..clear()
+              ..addAll(list);
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _schoolsError = data is Map<String, dynamic>
+                ? (data['message'] as String? ?? 'Erreur de chargement des Ã©coles')
+                : 'Erreur de chargement des Ã©coles';
+          });
+        }
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _schoolsError = 'Impossible de charger la liste des Ã©coles';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingSchools = false;
+        });
+      }
+    }
+  }
+  bool _isInvalidCredentialsError(String? message) {
+    final lower = (message ?? '').toLowerCase();
+    return lower.contains('pdf') ||
+        (lower.contains('identifiant') &&
+            (lower.contains('incorrect') || lower.contains('invalide')));
+  }
+
+  String _formatAddChildError(String? message) {
+    if (_isInvalidCredentialsError(message)) {
+      return 'Identifiants de l\'enfant incorrects.';
+    }
+    return message ?? 'Erreur lors de l\'ajout';
+  }
+
+  void _resetForm() {
+    _formKey.currentState?.reset();
+    _firstNameController.clear();
+    _lastNameController.clear();
+    _dateOfBirthController.clear();
+    _classNameController.clear();
+    _studentCodeController.clear();
+    _schoolController.clear();
+    setState(() {
+      _selectedSchoolId = null;
+    });
+  }
   @override
   void dispose() {
     _firstNameController.dispose();
     _lastNameController.dispose();
     _dateOfBirthController.dispose();
     _classNameController.dispose();
+    _studentCodeController.dispose();
     _schoolController.dispose();
     super.dispose();
   }
@@ -53,7 +131,10 @@ class _AddChildScreenState extends State<AddChildScreen> {
       lastName: _lastNameController.text.trim(),
       dateOfBirth: _dateOfBirthController.text,
       className: _classNameController.text.trim(),
-      schoolId: _selectedSchool,
+      studentCode: _studentCodeController.text.trim().isEmpty
+          ? null
+          : _studentCodeController.text.trim(),
+      schoolId: _selectedSchoolId,
     );
 
     setState(() => _isLoading = false);
@@ -61,15 +142,22 @@ class _AddChildScreenState extends State<AddChildScreen> {
     if (success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Demande d\'ajout envoyée avec succès!'),
+          content: Text('Enfant ajouté avec succès!'),
           backgroundColor: AppColors.success,
         ),
       );
       Navigator.of(context).pop();
     } else if (mounted) {
+      final rawErrorMessage = childProvider.errorMessage;
+      if (_isInvalidCredentialsError(rawErrorMessage)) {
+        _resetForm();
+        await childProvider.fetchChildren();
+        if (!mounted) return;
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(childProvider.errorMessage ?? 'Erreur lors de l\'ajout'),
+          content: Text(_formatAddChildError(rawErrorMessage)),
           backgroundColor: AppColors.error,
         ),
       );
@@ -152,18 +240,18 @@ class _AddChildScreenState extends State<AddChildScreen> {
                 
                 const SizedBox(height: AppTheme.xl),
                 
-                // Nom et Prénom modernes
+                // Nom et PrÃ©nom modernes
                 Row(
                   children: [
                     Expanded(
                       child: ModernTextField(
                         controller: _firstNameController,
-                        label: 'Prénom',
+                        label: 'PrÃ©nom',
                         hintText: 'Boureima',
                         prefixIcon: Icons.person_outline,
                         validator: (value) {
                           if (value == null || value.isEmpty) {
-                            return 'Veuillez entrer le prénom';
+                            return 'Veuillez entrer le prÃ©nom';
                           }
                           return null;
                         },
@@ -197,11 +285,16 @@ class _AddChildScreenState extends State<AddChildScreen> {
                   prefixIcon: Icons.calendar_today_outlined,
                   readOnly: true,
                   onTap: () async {
+                    final now = DateTime.now();
+                    final firstDate = DateTime(now.year - 18, 1, 1);
+                    final lastDate = DateTime(now.year - 3, 12, 31);
+                    final initialDate = DateTime(now.year - 5, 6, 15);
+
                     final date = await showDatePicker(
                       context: context,
-                      initialDate: DateTime.now().subtract(const Duration(days: 365 * 5)),
-                      firstDate: DateTime.now().subtract(const Duration(days: 365 * 18)),
-                      lastDate: DateTime.now().subtract(const Duration(days: 365 * 3)),
+                      initialDate: initialDate,
+                      firstDate: firstDate,
+                      lastDate: lastDate,
                     );
                     if (date != null) {
                       _dateOfBirthController.text = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
@@ -232,8 +325,24 @@ class _AddChildScreenState extends State<AddChildScreen> {
                 ),
                 
                 const SizedBox(height: AppTheme.lg),
+
+                // Code Ã©lÃ¨ve (matricule)
+                ModernTextField(
+                  controller: _studentCodeController,
+                  label: 'Code Ã©lÃ¨ve (matricule)',
+                  hintText: 'EX: CM1-025',
+                  prefixIcon: Icons.badge_outlined,
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Veuillez entrer le code Ã©lÃ¨ve';
+                    }
+                    return null;
+                  },
+                ),
                 
-                // École moderne
+                const SizedBox(height: AppTheme.lg),
+                
+                // Ã‰cole moderne
                 Container(
                   decoration: BoxDecoration(
                     color: AppColors.surface,
@@ -245,10 +354,10 @@ class _AddChildScreenState extends State<AddChildScreen> {
                     boxShadow: AppColors.cardShadow,
                   ),
                   child: DropdownButtonFormField<String>(
-                    value: _selectedSchool,
+                    value: _selectedSchoolId,
                     decoration: InputDecoration(
-                      labelText: 'École',
-                      hintText: 'Sélectionner une école',
+                      labelText: 'Ã‰cole',
+                      hintText: _isLoadingSchools ? 'Chargement...' : 'SÃ©lectionner une Ã©cole',
                       prefixIcon: const Icon(Icons.school_outlined, color: AppColors.textTertiary),
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(
@@ -267,9 +376,9 @@ class _AddChildScreenState extends State<AddChildScreen> {
                     ),
                     items: _schools.map((school) {
                       return DropdownMenuItem<String>(
-                        value: school,
+                        value: school.id,
                         child: Text(
-                          school,
+                          school.name,
                           style: GoogleFonts.inter(
                             color: AppColors.textPrimary,
                             fontSize: 14,
@@ -277,15 +386,34 @@ class _AddChildScreenState extends State<AddChildScreen> {
                         ),
                       );
                     }).toList(),
+                    onTap: () {
+                      if (_schools.isEmpty && !_isLoadingSchools) {
+                        _loadSchools();
+                      }
+                    },
                     onChanged: (value) {
                       setState(() {
-                        _selectedSchool = value;
-                        _schoolController.text = value ?? '';
+                        _selectedSchoolId = value;
+                        final selected = _schools.firstWhere(
+                          (school) => school.id == value,
+                          orElse: () => SchoolModel(
+                            id: '',
+                            name: '',
+                            address: '',
+                            city: '',
+                            studentCount: 0,
+                            status: 'inactive',
+                          ),
+                        );
+                        _schoolController.text = selected.name;
                       });
                     },
                     validator: (value) {
+                      if (_schools.isEmpty) {
+                        return _schoolsError ?? 'Aucune Ã©cole disponible';
+                      }
                       if (value == null || value.isEmpty) {
-                        return 'Veuillez sélectionner une école';
+                        return 'Veuillez sÃ©lectionner une Ã©cole';
                       }
                       return null;
                     },
@@ -296,7 +424,7 @@ class _AddChildScreenState extends State<AddChildScreen> {
                 
                 // Bouton d'ajout moderne
                 ModernButton(
-                  text: 'Envoyer la demande',
+                  text: 'Ajouter l\'enfant',
                   onPressed: _handleAddChild,
                   isLoading: _isLoading,
                   fullWidth: true,
@@ -330,7 +458,7 @@ class _AddChildScreenState extends State<AddChildScreen> {
                       const SizedBox(width: AppTheme.md),
                       Expanded(
                         child: Text(
-                          'La demande sera envoyée à l\'administrateur de l\'école pour validation.',
+                          'L\'enfant sera lié à votre compte parent.',
                           style: GoogleFonts.inter(
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
@@ -349,3 +477,5 @@ class _AddChildScreenState extends State<AddChildScreen> {
     );
   }
 }
+
+

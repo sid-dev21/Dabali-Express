@@ -1,13 +1,31 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
-import { CreditCard, Search, ArrowUpRight, Clock, Target } from 'lucide-react';
+import { CreditCard, Search, CheckCircle } from 'lucide-react';
 import { paymentsApi, studentsApi } from '../services/api';
-import { Payment, Student } from '../types';
+import { Student } from '../types';
+
+interface LocalPayment {
+  id: string;
+  studentId: string;
+  studentName: string;
+  schoolId: string;
+  amount: number;
+  date: string;
+  method: string;
+  status: 'COMPLETED' | 'WAITING_ADMIN_VALIDATION' | 'FAILED';
+}
 
 interface PaymentsProps {
-  schoolId?: string;
+  schoolId: string;
   initialSearch?: string;
 }
+
+type CashSubscriptionType = 'monthly' | 'quarterly' | 'annual';
+
+const SUBSCRIPTION_PRICES: Record<CashSubscriptionType, number> = {
+  monthly: 5000,
+  quarterly: 15000,
+  annual: 50000,
+};
 
 const Payments: React.FC<PaymentsProps> = ({ schoolId, initialSearch = '' }) => {
   const [searchTerm, setSearchTerm] = useState(initialSearch);
@@ -16,17 +34,24 @@ const Payments: React.FC<PaymentsProps> = ({ schoolId, initialSearch = '' }) => 
     setSearchTerm(initialSearch);
   }, [initialSearch]);
 
-  const [payments, setPayments] = useState<Payment[]>([]);
+  const [payments, setPayments] = useState<LocalPayment[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
+  const [cashForm, setCashForm] = useState({
+    studentId: '',
+    studentName: '',
+    amount: String(SUBSCRIPTION_PRICES.monthly),
+    subscriptionType: 'monthly' as CashSubscriptionType,
+    startDate: new Date().toISOString().split('T')[0],
+    reference: '',
+    notes: '',
+  });
 
-  // Charger les données depuis l'API
   useEffect(() => {
     const loadData = async () => {
       try {
-        // Remplacer par de vrais appels API quand disponibles
         const [paymentsData, studentsData] = await Promise.all([
-          Promise.resolve([]), // paymentsApi.getPayments(schoolId)
-          Promise.resolve([])  // studentsApi.getStudents(schoolId)
+          Promise.resolve([]),
+          Promise.resolve([])
         ]);
         setPayments(paymentsData);
         setStudents(studentsData);
@@ -45,75 +70,177 @@ const Payments: React.FC<PaymentsProps> = ({ schoolId, initialSearch = '' }) => 
     [payments, searchTerm]
   );
 
-  const stats = useMemo(() => {
-    const total = payments.reduce((acc, curr) => acc + curr.amount, 0);
-    const pending = payments.filter(p => p.status === 'pending').reduce((acc, curr) => acc + curr.amount, 0);
-    const count = payments.length;
-    // Revenu moyen réel par élève inscrit
-    const avgPerStudent = students.length > 0 ? Math.floor(total / students.length) : 0;
-    return { total, pending, count, avgPerStudent };
-  }, [payments, students]);
+  const handleCashValidation = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const amountValue = Number(cashForm.amount);
+    const studentName = cashForm.studentName.trim();
+
+    if (!studentName || Number.isNaN(amountValue) || amountValue <= 0) {
+      alert('Veuillez renseigner le nom de l\'élève et un montant valide.');
+      return;
+    }
+
+    const matchedStudent = students.find(s => s.id === cashForm.studentId) ||
+      students.find(s => `${s.firstName} ${s.lastName}`.toLowerCase() === studentName.toLowerCase());
+
+    const newPayment: LocalPayment = {
+      id: `cash-${Date.now()}`,
+      studentId: matchedStudent?.id || 'manual',
+      studentName: matchedStudent ? `${matchedStudent.firstName} ${matchedStudent.lastName}` : studentName,
+      schoolId: matchedStudent?.schoolId || schoolId || '',
+      amount: amountValue,
+      date: new Date().toISOString(),
+      method: 'CASH',
+      status: 'COMPLETED',
+    };
+
+    setPayments(prev => [newPayment, ...prev]);
+    setCashForm(prev => ({
+      ...prev,
+      studentId: '',
+      studentName: '',
+      amount: String(SUBSCRIPTION_PRICES[prev.subscriptionType]),
+      reference: '',
+      notes: '',
+    }));
+
+    alert('Abonnement validé en espèces.');
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 transition-all hover:shadow-md">
-          <div className="flex justify-between items-center mb-4">
-            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl">
-              <ArrowUpRight size={20} />
-            </div>
-          </div>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Recettes de l'école</p>
-          <h3 className="text-3xl font-black text-slate-800 mt-1">{stats.total.toLocaleString()} FCFA</h3>
-        </div>
-
-        <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 transition-all hover:shadow-md">
-          <div className="flex justify-between items-center mb-4">
-            <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl">
-              <Target size={20} />
-            </div>
-            <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-1 rounded-lg uppercase tracking-wider">{stats.count} transactions</span>
-          </div>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Moyenne / Élève inscrit</p>
-          <h3 className="text-3xl font-black text-slate-800 mt-1">
-            {stats.avgPerStudent.toLocaleString()} FCFA
-          </h3>
-        </div>
-
-        <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 transition-all hover:shadow-md">
-          <div className="flex justify-between items-center mb-4">
-            <div className="p-3 bg-amber-50 text-amber-600 rounded-2xl">
-              <Clock size={20} />
-            </div>
-          </div>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Montants en attente</p>
-          <h3 className="text-3xl font-black text-slate-800 mt-1">{stats.pending.toLocaleString()} FCFA</h3>
-        </div>
+      <div className="surface-card p-6">
+        <h3 className="section-title">Journal des Transactions</h3>
+        <p className="text-xs text-slate-500 font-medium mt-1">Historique exact des encaissements.</p>
       </div>
 
-      <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
-        <div className="p-8 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
-          <div>
-            <h3 className="text-xl font-black text-slate-800">Journal des Transactions</h3>
-            <p className="text-xs text-slate-400 font-medium italic">Historique exact des encaissements.</p>
-          </div>
-          <div className="flex w-full md:w-auto">
-            <div className="relative flex-grow md:w-72">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-              <input 
+      <div className="surface-card p-6 space-y-6">
+        <div>
+          <h3 className="section-title">Validation Abonnement Cash</h3>
+          <p className="text-xs text-slate-500 font-medium mt-1">
+            Pour School Admin et Super Admin : validez un abonnement payé en espèces.
+          </p>
+        </div>
+        <form onSubmit={handleCashValidation} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="space-y-1 md:col-span-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Élève</label>
+            {students.length > 0 ? (
+              <select
+                value={cashForm.studentId}
+                onChange={(e) => {
+                  const studentId = e.target.value;
+                  const student = students.find(s => s.id === studentId);
+                  setCashForm(prev => ({
+                    ...prev,
+                    studentId,
+                    studentName: student ? `${student.firstName} ${student.lastName}` : prev.studentName
+                  }));
+                }}
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-medium"
+              >
+                <option value="">Sélectionner un élève</option>
+                {students.map(student => (
+                  <option key={student.id} value={student.id}>
+                    {student.firstName} {student.lastName}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
                 type="text"
-                placeholder="Chercher un élève..."
-                className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all font-bold text-slate-700 outline-none"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                value={cashForm.studentName}
+                onChange={(e) => setCashForm(prev => ({ ...prev, studentName: e.target.value }))}
+                placeholder="Nom de l'élève"
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-medium"
               />
-            </div>
+            )}
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Montant (FCFA)</label>
+            <input
+              type="number"
+              value={cashForm.amount}
+              onChange={(e) => setCashForm(prev => ({ ...prev, amount: e.target.value }))}
+              placeholder="Ex: 5000"
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-medium"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Type d'abonnement</label>
+            <select
+              value={cashForm.subscriptionType}
+              onChange={(e) => {
+                const subscriptionType = e.target.value as CashSubscriptionType;
+                setCashForm(prev => ({
+                  ...prev,
+                  subscriptionType,
+                  amount: String(SUBSCRIPTION_PRICES[subscriptionType]),
+                }));
+              }}
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-medium"
+            >
+              <option value="monthly">Mensuel - 5 000 FCFA</option>
+              <option value="quarterly">Trimestriel - 15 000 FCFA</option>
+              <option value="annual">Annuel - 50 000 FCFA</option>
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Date de début</label>
+            <input
+              type="date"
+              value={cashForm.startDate}
+              onChange={(e) => setCashForm(prev => ({ ...prev, startDate: e.target.value }))}
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-medium"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Référence (optionnel)</label>
+            <input
+              type="text"
+              value={cashForm.reference}
+              onChange={(e) => setCashForm(prev => ({ ...prev, reference: e.target.value }))}
+              placeholder="Reçu / Ticket"
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-medium"
+            />
+          </div>
+          <div className="space-y-1 md:col-span-3">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Notes</label>
+            <input
+              type="text"
+              value={cashForm.notes}
+              onChange={(e) => setCashForm(prev => ({ ...prev, notes: e.target.value }))}
+              placeholder="Informations complémentaires"
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-medium"
+            />
+          </div>
+          <div className="md:col-span-3 flex justify-end pt-2">
+            <button
+              type="submit"
+              className="flex items-center gap-2 bg-emerald-600 text-white px-5 py-2.5 rounded-xl hover:bg-emerald-700 transition-all font-black text-xs uppercase tracking-widest"
+            >
+              <CheckCircle size={16} />
+              Valider le cash
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <div className="table-shell">
+        <div className="p-6 border-b border-slate-100 flex justify-end">
+          <div className="relative w-full md:w-72">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <input 
+              type="text"
+              placeholder="Chercher un élève..."
+              className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all font-bold text-slate-700 outline-none"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
           </div>
         </div>
-
         <div className="overflow-x-auto">
           <table className="w-full text-left">
-            <thead className="bg-slate-50/50 text-slate-400 text-[10px] uppercase font-black tracking-[0.2em]">
+            <thead className="table-head">
               <tr>
                 <th className="px-8 py-5">Élève</th>
                 <th className="px-8 py-5">Montant</th>
@@ -131,15 +258,27 @@ const Payments: React.FC<PaymentsProps> = ({ schoolId, initialSearch = '' }) => 
                   <td className="px-8 py-4">
                     <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border ${
                       p.method === 'ORANGE_MONEY' ? 'bg-orange-50 text-orange-700 border-orange-100' :
-                      p.method === 'MOOV_MONEY' ? 'bg-blue-50 text-blue-700 border-blue-100' : 'bg-slate-50 text-slate-600 border-slate-200'
+                      p.method === 'MOOV_MONEY' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-50 text-slate-600 border-slate-200'
                     }`}>
                       {p.method.replace('_', ' ')}
                     </span>
                   </td>
                   <td className="px-8 py-4 text-right">
-                    <span className={`inline-flex items-center space-x-2 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter ${p.status === 'completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
-                      <div className={`w-1.5 h-1.5 rounded-full ${p.status === 'completed' ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`}></div>
-                      <span>{p.status === 'completed' ? 'Validé' : 'En attente'}</span>
+                    <span className={`inline-flex items-center space-x-2 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter ${
+                      p.status === 'COMPLETED' ? 'bg-emerald-50 text-emerald-600' : 
+                      p.status === 'WAITING_ADMIN_VALIDATION' ? 'bg-amber-50 text-amber-600' :
+                      'bg-red-50 text-red-600'
+                    }`}>
+                      <div className={`w-1.5 h-1.5 rounded-full ${
+                        p.status === 'COMPLETED' ? 'bg-emerald-500' : 
+                        p.status === 'WAITING_ADMIN_VALIDATION' ? 'bg-amber-500 animate-pulse' :
+                        'bg-red-500'
+                      }`}></div>
+                      <span>
+                        {p.status === 'COMPLETED' ? 'Validé' : 
+                         p.status === 'WAITING_ADMIN_VALIDATION' ? 'En attente validation' :
+                         'Échoué'}
+                      </span>
                     </span>
                   </td>
                 </tr>

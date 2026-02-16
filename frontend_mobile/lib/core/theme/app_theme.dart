@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../constants/app_colors.dart';
 
 class AppTheme {
-  // Espacements
+  // Spacing
   static const double xs = 4.0;
   static const double sm = 8.0;
   static const double md = 16.0;
   static const double lg = 24.0;
   static const double xl = 32.0;
   static const double xxl = 48.0;
-  
+
   // Border radius
   static const double radiusSmall = 8.0;
   static const double radiusMedium = 12.0;
@@ -17,256 +18,238 @@ class AppTheme {
   static const double radiusXLarge = 20.0;
 
   static ThemeData get lightTheme {
-    return ThemeData(
+    final colorScheme = const ColorScheme.light(
+      primary: AppColors.primary,
+      onPrimary: Colors.white,
+      secondary: AppColors.secondary,
+      onSecondary: AppColors.primaryDark,
+      error: AppColors.error,
+      onError: Colors.white,
+      surface: AppColors.surface,
+      onSurface: AppColors.textPrimary,
+    );
+
+    final baseTheme = ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
-      
-      // Couleurs principales
-      colorScheme: const ColorScheme.light(
-        primary: AppColors.primary,
-        secondary: AppColors.secondary,
-        error: AppColors.error,
-        surface: AppColors.surface,
-        background: AppColors.background,
-        onPrimary: Colors.white,
-        onSecondary: Colors.white,
-        onError: Colors.white,
-        onSurface: AppColors.textPrimary,
-        onBackground: AppColors.textPrimary,
+      colorScheme: colorScheme,
+      scaffoldBackgroundColor: AppColors.background,
+      canvasColor: AppColors.background,
+      dividerColor: AppColors.border,
+      splashFactory: InkRipple.splashFactory,
+    );
+
+    final textTheme = GoogleFonts.soraTextTheme(baseTheme.textTheme).copyWith(
+      displayLarge: GoogleFonts.spaceGrotesk(
+        fontSize: 34,
+        fontWeight: FontWeight.w700,
+        color: AppColors.textStrong,
       ),
-      
-      // Typography avec Inter
-      textTheme: const TextTheme(
-        displayLarge: TextStyle(
-          fontSize: 32,
-          fontWeight: FontWeight.w700,
-          color: AppColors.textPrimary,
-          fontFamily: 'Inter',
-        ),
-        displayMedium: TextStyle(
-          fontSize: 28,
-          fontWeight: FontWeight.w600,
-          color: AppColors.textPrimary,
-          fontFamily: 'Inter',
-        ),
-        displaySmall: TextStyle(
-          fontSize: 24,
-          fontWeight: FontWeight.w600,
-          color: AppColors.textPrimary,
-          fontFamily: 'Inter',
-        ),
-        headlineLarge: TextStyle(
-          fontSize: 22,
-          fontWeight: FontWeight.w600,
-          color: AppColors.textPrimary,
-          fontFamily: 'Inter',
-        ),
-        headlineMedium: TextStyle(
-          fontSize: 20,
-          fontWeight: FontWeight.w600,
-          color: AppColors.textPrimary,
-          fontFamily: 'Inter',
-        ),
-        headlineSmall: TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.w600,
-          color: AppColors.textPrimary,
-          fontFamily: 'Inter',
-        ),
-        titleLarge: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-          color: AppColors.textPrimary,
-          fontFamily: 'Inter',
-        ),
-        titleMedium: TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          color: AppColors.textPrimary,
-          fontFamily: 'Inter',
-        ),
-        titleSmall: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: AppColors.textPrimary,
-          fontFamily: 'Inter',
-        ),
-        bodyLarge: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w400,
-          color: AppColors.textPrimary,
-          fontFamily: 'Inter',
-        ),
-        bodyMedium: TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w400,
-          color: AppColors.textPrimary,
-          fontFamily: 'Inter',
-        ),
-        bodySmall: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w400,
-          color: AppColors.textSecondary,
-          fontFamily: 'Inter',
-        ),
-        labelLarge: TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w500,
-          color: AppColors.textPrimary,
-          fontFamily: 'Inter',
-        ),
-        labelMedium: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-          color: AppColors.textSecondary,
-          fontFamily: 'Inter',
-        ),
-        labelSmall: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w500,
-          color: AppColors.textTertiary,
-          fontFamily: 'Inter',
-        ),
+      displayMedium: GoogleFonts.spaceGrotesk(
+        fontSize: 30,
+        fontWeight: FontWeight.w700,
+        color: AppColors.textStrong,
       ),
-      
-      // App bar theme
-      appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.surface,
+      displaySmall: GoogleFonts.spaceGrotesk(
+        fontSize: 26,
+        fontWeight: FontWeight.w700,
+        color: AppColors.textStrong,
+      ),
+      headlineLarge: GoogleFonts.spaceGrotesk(
+        fontSize: 24,
+        fontWeight: FontWeight.w700,
+        color: AppColors.textStrong,
+      ),
+      headlineMedium: GoogleFonts.spaceGrotesk(
+        fontSize: 22,
+        fontWeight: FontWeight.w700,
+        color: AppColors.textStrong,
+      ),
+      headlineSmall: GoogleFonts.spaceGrotesk(
+        fontSize: 19,
+        fontWeight: FontWeight.w700,
+        color: AppColors.textStrong,
+      ),
+      titleLarge: GoogleFonts.spaceGrotesk(
+        fontSize: 17,
+        fontWeight: FontWeight.w600,
+        color: AppColors.textStrong,
+      ),
+      titleMedium: GoogleFonts.sora(
+        fontSize: 15,
+        fontWeight: FontWeight.w600,
+        color: AppColors.textPrimary,
+      ),
+      titleSmall: GoogleFonts.sora(
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+        color: AppColors.textPrimary,
+      ),
+      bodyLarge: GoogleFonts.sora(
+        fontSize: 16,
+        fontWeight: FontWeight.w400,
+        color: AppColors.textPrimary,
+      ),
+      bodyMedium: GoogleFonts.sora(
+        fontSize: 14,
+        fontWeight: FontWeight.w400,
+        color: AppColors.textPrimary,
+      ),
+      bodySmall: GoogleFonts.sora(
+        fontSize: 12,
+        fontWeight: FontWeight.w400,
+        color: AppColors.textSecondary,
+      ),
+      labelLarge: GoogleFonts.sora(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        color: AppColors.textPrimary,
+      ),
+      labelMedium: GoogleFonts.sora(
+        fontSize: 12,
+        fontWeight: FontWeight.w500,
+        color: AppColors.textSecondary,
+      ),
+      labelSmall: GoogleFonts.sora(
+        fontSize: 11,
+        fontWeight: FontWeight.w500,
+        color: AppColors.textTertiary,
+      ),
+    );
+
+    return baseTheme.copyWith(
+      textTheme: textTheme,
+      appBarTheme: AppBarTheme(
+        backgroundColor: AppColors.surface.withOpacity(0.94),
+        foregroundColor: AppColors.textStrong,
         elevation: 0,
         scrolledUnderElevation: 0,
-        titleTextStyle: TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.w600,
-          color: AppColors.textPrimary,
-          fontFamily: 'Inter',
+        centerTitle: false,
+        shadowColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        titleTextStyle: GoogleFonts.spaceGrotesk(
+          fontSize: 20,
+          fontWeight: FontWeight.w700,
+          color: AppColors.textStrong,
         ),
-        iconTheme: IconThemeData(
+        iconTheme: const IconThemeData(
           color: AppColors.textPrimary,
-          size: 24,
+          size: 22,
         ),
       ),
-      
-      // Card theme
-      cardTheme: const CardThemeData(
+      cardTheme: CardThemeData(
         color: AppColors.card,
+        margin: EdgeInsets.zero,
         elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: const Color(0xFF1D1B18).withOpacity(0.2),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(radiusLarge)),
+          borderRadius: BorderRadius.circular(radiusLarge),
+          side: const BorderSide(color: AppColors.border),
         ),
-        shadowColor: Color(0x0D000000),
       ),
-      
-      // Elevated button theme
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
           elevation: 0,
           shadowColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(radiusMedium),
-          ),
+          minimumSize: const Size.fromHeight(52),
+          shape: const StadiumBorder(),
           padding: const EdgeInsets.symmetric(horizontal: lg, vertical: md),
-          textStyle: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            fontFamily: 'Inter',
+          textStyle: GoogleFonts.sora(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.1,
           ),
         ),
       ),
-      
-      // Outlined button theme
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.primary,
-          side: const BorderSide(color: AppColors.primary, width: 1),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(radiusMedium),
-          ),
+          foregroundColor: AppColors.textPrimary,
+          side: const BorderSide(color: AppColors.border, width: 1),
+          minimumSize: const Size.fromHeight(52),
+          shape: const StadiumBorder(),
           padding: const EdgeInsets.symmetric(horizontal: lg, vertical: md),
-          textStyle: const TextStyle(
-            fontSize: 16,
+          textStyle: GoogleFonts.sora(
+            fontSize: 15,
             fontWeight: FontWeight.w600,
-            fontFamily: 'Inter',
           ),
         ),
       ),
-      
-      // Text button theme
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: AppColors.primary,
+          foregroundColor: AppColors.secondaryDark,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(radiusMedium),
           ),
           padding: const EdgeInsets.symmetric(horizontal: md, vertical: sm),
-          textStyle: const TextStyle(
+          textStyle: GoogleFonts.sora(
             fontSize: 14,
             fontWeight: FontWeight.w600,
-            fontFamily: 'Inter',
           ),
         ),
       ),
-      
-      // Input decoration theme
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppColors.surface,
         contentPadding: const EdgeInsets.symmetric(horizontal: md, vertical: md),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(radiusMedium),
-          borderSide: const BorderSide(color: Color(0xFFE5E7EB), width: 1),
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: AppColors.border, width: 1),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(radiusMedium),
-          borderSide: const BorderSide(color: Color(0xFFE5E7EB), width: 1),
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: AppColors.border, width: 1),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(radiusMedium),
-          borderSide: const BorderSide(color: AppColors.primary, width: 2),
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: AppColors.secondaryDark, width: 1.6),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(radiusMedium),
+          borderRadius: BorderRadius.circular(14),
           borderSide: const BorderSide(color: AppColors.error, width: 1),
         ),
         focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(radiusMedium),
-          borderSide: const BorderSide(color: AppColors.error, width: 2),
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: AppColors.error, width: 1.6),
         ),
-        labelStyle: const TextStyle(
+        labelStyle: GoogleFonts.sora(
           color: AppColors.textSecondary,
           fontSize: 14,
-          fontFamily: 'Inter',
+          fontWeight: FontWeight.w500,
         ),
-        hintStyle: const TextStyle(
+        hintStyle: GoogleFonts.sora(
           color: AppColors.textTertiary,
           fontSize: 14,
-          fontFamily: 'Inter',
+          fontWeight: FontWeight.w400,
         ),
-        errorStyle: const TextStyle(
+        errorStyle: GoogleFonts.sora(
           color: AppColors.error,
           fontSize: 12,
-          fontFamily: 'Inter',
+          fontWeight: FontWeight.w500,
         ),
       ),
-      
-      // Bottom navigation bar theme
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppColors.primary,
+        contentTextStyle: GoogleFonts.sora(
+          color: Colors.white,
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
+      ),
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
         backgroundColor: AppColors.surface,
-        selectedItemColor: AppColors.primary,
+        selectedItemColor: AppColors.secondaryDark,
         unselectedItemColor: AppColors.textTertiary,
+        selectedIconTheme: IconThemeData(size: 24),
+        unselectedIconTheme: IconThemeData(size: 22),
         type: BottomNavigationBarType.fixed,
         elevation: 0,
-        selectedLabelStyle: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          fontFamily: 'Inter',
-        ),
-        unselectedLabelStyle: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w400,
-          fontFamily: 'Inter',
-        ),
       ),
     );
   }

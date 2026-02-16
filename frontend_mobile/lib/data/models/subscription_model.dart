@@ -20,6 +20,7 @@ class SubscriptionModel {
   final DateTime startDate;
   final DateTime endDate;
   final SubscriptionStatus status;
+  final String? paymentMethod;
   final DateTime createdAt;
   final DateTime updatedAt;
   final Map<String, dynamic>? paymentDetails;
@@ -33,25 +34,88 @@ class SubscriptionModel {
     required this.startDate,
     required this.endDate,
     required this.status,
+    this.paymentMethod,
     required this.createdAt,
     required this.updatedAt,
     this.paymentDetails,
   });
 
   factory SubscriptionModel.fromJson(Map<String, dynamic> json) {
+    final childId = _extractChildId(json);
+    final createdAt = _parseDate(json['createdAt'] ?? json['created_at']) ?? DateTime.now();
+    final updatedAt = _parseDate(json['updatedAt'] ?? json['updated_at']) ?? createdAt;
     return SubscriptionModel(
-      id: json['id'] ?? '',
-      childId: json['childId'] ?? '',
-      parentId: json['parentId'] ?? '',
-      type: _parseSubscriptionType(json['type']),
-      amount: (json['amount'] ?? 0).toDouble(),
-      startDate: DateTime.parse(json['startDate'] ?? DateTime.now().toIso8601String()),
-      endDate: DateTime.parse(json['endDate'] ?? DateTime.now().toIso8601String()),
-      status: _parseSubscriptionStatus(json['status']),
-      createdAt: DateTime.parse(json['createdAt'] ?? DateTime.now().toIso8601String()),
-      updatedAt: DateTime.parse(json['updatedAt'] ?? DateTime.now().toIso8601String()),
-      paymentDetails: json['paymentDetails'],
+      id: _extractId(json),
+      childId: childId,
+      parentId: _extractParentId(json),
+      type: _parseSubscriptionType(json['type'] ?? json['plan_type'] ?? json['subscription_type'] ?? json['meal_plan']),
+      amount: _toAmount(json),
+      startDate: _parseDate(json['startDate'] ?? json['start_date']) ?? DateTime.now(),
+      endDate: _parseDate(json['endDate'] ?? json['end_date']) ?? DateTime.now(),
+      status: _parseSubscriptionStatus(json['status']?.toString()),
+      paymentMethod: _extractPaymentMethod(json),
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+      paymentDetails: (json['paymentDetails'] ?? json['payment_details']) is Map<String, dynamic>
+          ? (json['paymentDetails'] ?? json['payment_details']) as Map<String, dynamic>
+          : null,
     );
+  }
+
+  static String _extractId(Map<String, dynamic> json) {
+    final raw = json['id'] ?? json['_id'];
+    if (raw == null) return '';
+    if (raw is Map<String, dynamic>) {
+      return (raw['_id'] ?? raw['id'] ?? '').toString();
+    }
+    return raw.toString();
+  }
+
+  static String _extractChildId(Map<String, dynamic> json) {
+    final direct = json['childId'] ?? json['child_id'] ?? json['studentId'] ?? json['student_id'];
+    if (direct is Map<String, dynamic>) {
+      return (direct['_id'] ?? direct['id'] ?? '').toString();
+    }
+    if (direct != null) {
+      return direct.toString();
+    }
+    return '';
+  }
+
+  static String _extractParentId(Map<String, dynamic> json) {
+    final raw = json['parentId'] ?? json['parent_id'];
+    if (raw is Map<String, dynamic>) {
+      return (raw['_id'] ?? raw['id'] ?? '').toString();
+    }
+    return raw?.toString() ?? '';
+  }
+
+  static double _toAmount(Map<String, dynamic> json) {
+    final raw = json['amount'] ?? json['price'] ?? 0;
+    if (raw is num) return raw.toDouble();
+    return double.tryParse(raw.toString()) ?? 0;
+  }
+
+  static DateTime? _parseDate(dynamic raw) {
+    if (raw == null) return null;
+    return DateTime.tryParse(raw.toString());
+  }
+
+  static String? _extractPaymentMethod(Map<String, dynamic> json) {
+    final directMethod = json['paymentMethod'] ?? json['payment_method'];
+    if (directMethod != null && directMethod.toString().trim().isNotEmpty) {
+      return directMethod.toString();
+    }
+
+    final details = json['paymentDetails'] ?? json['payment_details'];
+    if (details is Map<String, dynamic>) {
+      final nestedMethod = details['method'] ?? details['paymentMethod'] ?? details['payment_method'];
+      if (nestedMethod != null && nestedMethod.toString().trim().isNotEmpty) {
+        return nestedMethod.toString();
+      }
+    }
+
+    return null;
   }
 
   Map<String, dynamic> toJson() {
@@ -64,6 +128,7 @@ class SubscriptionModel {
       'startDate': startDate.toIso8601String(),
       'endDate': endDate.toIso8601String(),
       'status': _statusToString(status),
+      'paymentMethod': paymentMethod,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
       'paymentDetails': paymentDetails,
@@ -71,12 +136,13 @@ class SubscriptionModel {
   }
 
   static SubscriptionType _parseSubscriptionType(String? type) {
-    switch (type) {
+    switch ((type ?? '').toUpperCase()) {
       case 'MONTHLY':
         return SubscriptionType.monthly;
       case 'QUARTERLY':
         return SubscriptionType.quarterly;
       case 'YEARLY':
+      case 'ANNUAL':
         return SubscriptionType.yearly;
       default:
         return SubscriptionType.monthly;
@@ -95,14 +161,19 @@ class SubscriptionModel {
   }
 
   static SubscriptionStatus _parseSubscriptionStatus(String? status) {
-    switch (status) {
+    switch ((status ?? '').toUpperCase()) {
       case 'PENDING_PAYMENT':
+      case 'PENDING':
+      case 'WAITING_ADMIN_VALIDATION':
         return SubscriptionStatus.pendingPayment;
       case 'ACTIVE':
+      case 'COMPLETED':
         return SubscriptionStatus.active;
       case 'EXPIRED':
+      case 'FAILED':
         return SubscriptionStatus.expired;
       case 'CANCELLED':
+      case 'REJECTED':
         return SubscriptionStatus.cancelled;
       default:
         return SubscriptionStatus.pendingPayment;
@@ -131,6 +202,7 @@ class SubscriptionModel {
     DateTime? startDate,
     DateTime? endDate,
     SubscriptionStatus? status,
+    String? paymentMethod,
     DateTime? createdAt,
     DateTime? updatedAt,
     Map<String, dynamic>? paymentDetails,
@@ -144,6 +216,7 @@ class SubscriptionModel {
       startDate: startDate ?? this.startDate,
       endDate: endDate ?? this.endDate,
       status: status ?? this.status,
+      paymentMethod: paymentMethod ?? this.paymentMethod,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       paymentDetails: paymentDetails ?? this.paymentDetails,

@@ -119,49 +119,13 @@ const Reports: React.FC<ReportsProps> = ({ schoolId, userRole }) => {
 
   const renderAttendanceReport = () => (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[10px] font-black text-blue-800 uppercase tracking-widest mb-1">Total élèves</p>
-              <p className="text-3xl font-black text-blue-700">{students.length}</p>
-            </div>
-            <Users size={24} className="text-blue-500" />
-          </div>
-        </div>
-        <div className="bg-emerald-50 p-6 rounded-2xl border border-emerald-100">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest mb-1">Abonnements actifs</p>
-              <p className="text-3xl font-black text-emerald-700">
-                {students.filter(s => s.subscriptionStatus === 'active').length}
-              </p>
-            </div>
-            <TrendingUp size={24} className="text-emerald-500" />
-          </div>
-        </div>
-        <div className="bg-amber-50 p-6 rounded-2xl border border-amber-100">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[10px] font-black text-amber-800 uppercase tracking-widest mb-1">Taux moyen présence</p>
-              <p className="text-3xl font-black text-amber-700">
-                {attendanceData.length > 0 
-                  ? ((attendanceData.reduce((sum, item) => sum + item.present, 0) / (attendanceData.length * students.length)) * 100).toFixed(1)
-                  : '0'}%
-              </p>
-            </div>
-            <PieChart size={24} className="text-amber-500" />
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-        <div className="p-6 border-b border-slate-100 bg-slate-50/50">
+      <div className="table-shell">
+        <div className="p-6 border-b border-slate-100 bg-slate-100/60">
           <h3 className="font-black text-slate-800 uppercase text-[10px] tracking-widest">Historique de présence</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-slate-50 text-slate-400 text-[10px] uppercase font-black tracking-widest">
+            <thead className="table-head">
               <tr>
                 <th className="px-6 py-4 text-left">Date</th>
                 <th className="px-6 py-4 text-right">Présents</th>
@@ -172,7 +136,7 @@ const Reports: React.FC<ReportsProps> = ({ schoolId, userRole }) => {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {attendanceData.map((item, index) => (
-                <tr key={index} className="hover:bg-slate-50/50 transition-colors">
+                <tr key={index} className="hover:bg-slate-100/60 transition-colors">
                   <td className="px-6 py-4 font-bold text-slate-800">{item.date}</td>
                   <td className="px-6 py-4 text-right text-emerald-600 font-black">{item.present}</td>
                   <td className="px-6 py-4 text-right text-amber-600 font-black">{item.absent}</td>
@@ -196,13 +160,13 @@ const Reports: React.FC<ReportsProps> = ({ schoolId, userRole }) => {
 
   const renderMenuReport = () => (
     <div className="space-y-6">
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-        <div className="p-6 border-b border-slate-100 bg-slate-50/50">
+      <div className="table-shell">
+        <div className="p-6 border-b border-slate-100 bg-slate-100/60">
           <h3 className="font-black text-slate-800 uppercase text-[10px] tracking-widest">Menus de la semaine</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-slate-50 text-slate-400 text-[10px] uppercase font-black tracking-widest">
+            <thead className="table-head">
               <tr>
                 <th className="px-6 py-4 text-left">Date</th>
                 <th className="px-6 py-4 text-left">Repas</th>
@@ -214,7 +178,7 @@ const Reports: React.FC<ReportsProps> = ({ schoolId, userRole }) => {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {menuData.map((item, index) => (
-                <tr key={index} className="hover:bg-slate-50/50 transition-colors">
+                <tr key={index} className="hover:bg-slate-100/60 transition-colors">
                   <td className="px-6 py-4 font-bold text-slate-800">{item.date}</td>
                   <td className="px-6 py-4 text-slate-700 font-medium">{item.meal}</td>
                   <td className="px-6 py-4">
@@ -224,7 +188,7 @@ const Reports: React.FC<ReportsProps> = ({ schoolId, userRole }) => {
                   </td>
                   <td className="px-6 py-4 text-right text-slate-600 font-black">{item.price}</td>
                   <td className="px-6 py-4 text-right text-emerald-600 font-black">{item.consumed}</td>
-                  <td className="px-6 py-4 text-right font-black text-blue-600">
+                  <td className="px-6 py-4 text-right font-black text-emerald-600">
                     {item.price * item.consumed}
                   </td>
                 </tr>
@@ -236,58 +200,42 @@ const Reports: React.FC<ReportsProps> = ({ schoolId, userRole }) => {
     </div>
   );
 
-  const renderSummaryReport = () => {
+    const renderSummaryReport = () => {
     const totalStudents = students.length;
     const activeSubscriptions = students.filter(s => s.subscriptionStatus === 'active').length;
     const totalPresent = attendanceData.reduce((sum, item) => sum + item.present, 0);
     const totalMeals = menuData.reduce((sum, item) => sum + item.consumed, 0);
     const totalRevenue = menuData.reduce((sum, item) => sum + (item.price * item.consumed), 0);
+    const avgMealPrice = totalMeals > 0 ? Math.round(totalRevenue / totalMeals) : 0;
 
     return (
       <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total élèves</p>
-                <p className="text-2xl font-black text-slate-800">{totalStudents}</p>
-              </div>
-              <Users size={24} className="text-slate-300" />
+        <div className="surface-card p-6">
+          <h3 className="section-title">Synthèse</h3>
+          <div className="mt-4 space-y-3 text-sm">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <span className="text-slate-500">Total élèves</span>
+              <span className="font-semibold text-slate-800">{totalStudents}</span>
             </div>
-          </div>
-          
-          <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Abonnements actifs</p>
-                <p className="text-2xl font-black text-emerald-600">{activeSubscriptions}</p>
-              </div>
-              <TrendingUp size={24} className="text-emerald-500" />
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <span className="text-slate-500">Abonnements actifs</span>
+              <span className="font-semibold text-slate-800">{activeSubscriptions}</span>
             </div>
-            <p className="text-[10px] text-slate-500 mt-2">
-              Taux: {((activeSubscriptions / totalStudents) * 100).toFixed(1)}%
-            </p>
-          </div>
-          
-          <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Revenu total</p>
-                <p className="text-2xl font-black text-blue-600">{totalRevenue.toLocaleString()} FCFA</p>
-              </div>
-              <PieChart size={24} className="text-blue-500" />
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <span className="text-slate-500">Présences enregistrées</span>
+              <span className="font-semibold text-slate-800">{totalPresent}</span>
             </div>
-          </div>
-          
-          <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <span className="text-slate-500">Repas servis</span>
+              <span className="font-semibold text-slate-800">{totalMeals}</span>
+            </div>
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <span className="text-slate-500">Revenu total</span>
+              <span className="font-semibold text-slate-800">{totalRevenue.toLocaleString()} FCFA</span>
+            </div>
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Moyenne repas/jour</p>
-                <p className="text-2xl font-black text-amber-600">
-                  {menuData.length > 0 ? (totalMeals / menuData.length).toFixed(1) : '0'}
-                </p>
-              </div>
-              <Utensils size={24} className="text-amber-500" />
+              <span className="text-slate-500">Prix moyen repas</span>
+              <span className="font-semibold text-slate-800">{avgMealPrice.toLocaleString()} FCFA</span>
             </div>
           </div>
         </div>
@@ -297,13 +245,13 @@ const Reports: React.FC<ReportsProps> = ({ schoolId, userRole }) => {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="surface-card p-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h2 className="text-2xl font-black text-slate-800">Rapports et Analyses</h2>
-          <p className="text-sm text-slate-500 font-medium italic">Suivi complet des performances de la cantine</p>
+          <h2 className="section-title">Rapports et Analyses</h2>
+          <p className="text-sm text-slate-500 font-medium mt-1">Suivi complet des performances de la cantine</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-3">
-          <div className="flex space-x-2 bg-slate-100 p-1 rounded-xl">
+          <div className="flex space-x-2 card-muted p-1">
             <button 
               onClick={() => setReportType('attendance')}
               className={`px-4 py-2 rounded-lg font-black text-xs uppercase tracking-widest transition-all ${
@@ -352,7 +300,7 @@ const Reports: React.FC<ReportsProps> = ({ schoolId, userRole }) => {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+      <div className="surface-card p-6">
         <div className="flex items-center space-x-4 mb-6">
           <Calendar size={20} className="text-slate-400" />
           <input 
@@ -372,3 +320,11 @@ const Reports: React.FC<ReportsProps> = ({ schoolId, userRole }) => {
 };
 
 export default Reports;
+
+
+
+
+
+
+
+

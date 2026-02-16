@@ -4,6 +4,33 @@ import User from '../models/User';
 import { ApiResponse, CreateSchoolDTO, UserRole } from '../types';
 import { hashPassword } from '../utils/hashPassword';
 
+// Public: list schools for registration dropdown (no auth)
+export const getPublicSchools = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const schools = await School.find()
+      .select('name address city')
+      .sort({ name: 1 });
+
+    const data = schools.map((school) => ({
+      id: school._id.toString(),
+      name: school.name,
+      address: school.address,
+      city: school.city,
+    }));
+
+    res.json({
+      success: true,
+      data,
+    } as ApiResponse);
+  } catch (error) {
+    console.error('Get public schools error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error retrieving schools.'
+    } as ApiResponse);
+  }
+};
+
 // Allows to get all schools with populated admin info
 export const getAllSchools = async (req: Request, res: Response): Promise<void> => {
   try {

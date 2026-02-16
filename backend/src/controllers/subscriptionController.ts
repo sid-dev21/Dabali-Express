@@ -2,26 +2,93 @@ import { Request, Response } from 'express';
 import Subscription from '../models/Subscription';
 import Student from '../models/Student';
 import Payment from '../models/Payment';
-import { ApiResponse, CreateSubscriptionDTO } from '../types';
+import { ApiResponse, CreateSubscriptionDTO, UserRole } from '../types';
 
 // Allows to get all subscriptions with optional filters (student, status) and populated student info
 export const getAllSubscriptions = async (req: Request, res: Response): Promise<void> => {
   try {
     const student_id = req.query.student_id as string;
+    const school_id = req.query.school_id as string;
     const status = req.query.status as string;
 
     // Build query
     let query: any = {};
-    if (student_id) query.student_id = student_id;
     if (status) query.status = status;
+
+    if (student_id) {
+      query.$or = [{ student_id }, { child_id: student_id }];
+    }
+
+    if (school_id) {
+      const schoolStudentIds = await Student.find({ school_id }).distinct('_id');
+      const schoolFilter = {
+        $or: [
+          { student_id: { $in: schoolStudentIds } },
+          { child_id: { $in: schoolStudentIds } }
+        ]
+      };
+
+      if (query.$or) {
+        query = { $and: [{ $or: query.$or }, schoolFilter] };
+      } else {
+        query = { ...query, ...schoolFilter };
+      }
+    }
 
     const subscriptions = await Subscription.find(query)
       .populate('student_id', 'first_name last_name class_name')
       .sort({ created_at: -1 });
 
+    const rawSubscriptions = subscriptions.map((subscription: any) =>
+      typeof subscription?.toObject === 'function' ? subscription.toObject() : subscription
+    );
+
+    const childIds = rawSubscriptions
+      .map((subscription: any) => {
+        const populatedStudent = subscription?.student_id;
+        if (populatedStudent && typeof populatedStudent === 'object') {
+          const populatedId = populatedStudent._id || populatedStudent.id;
+          if (populatedId) return populatedId.toString();
+        }
+        const legacyId = subscription?.child_id || subscription?.student_id;
+        if (!legacyId) return '';
+        if (typeof legacyId === 'string') return legacyId;
+        if (typeof legacyId === 'object') return (legacyId._id || legacyId.id || '').toString();
+        return String(legacyId);
+      })
+      .filter(Boolean);
+
+    const children = childIds.length > 0
+      ? await Student.find({ _id: { $in: childIds } }).select('first_name last_name class_name school_id').lean()
+      : [];
+    const childById = new Map<string, any>();
+    children.forEach((child: any) => {
+      childById.set(String(child._id), child);
+    });
+
+    const normalizedSubscriptions = rawSubscriptions.map((subscription: any) => {
+      const populatedStudent = subscription?.student_id && typeof subscription.student_id === 'object'
+        ? subscription.student_id
+        : null;
+      const fallbackIdRaw = subscription?.child_id || subscription?.student_id || '';
+      const fallbackId = typeof fallbackIdRaw === 'object'
+        ? (fallbackIdRaw._id || fallbackIdRaw.id || '').toString()
+        : String(fallbackIdRaw || '');
+      const childId = (populatedStudent?._id || populatedStudent?.id || fallbackId || '').toString();
+      const child = populatedStudent || childById.get(childId) || null;
+
+      return {
+        ...subscription,
+        child,
+        childId,
+        startDate: subscription.startDate || subscription.start_date || '',
+        endDate: subscription.endDate || subscription.end_date || '',
+      };
+    });
+
     res.json({
       success: true,
-      data: subscriptions
+      data: normalizedSubscriptions
     } as ApiResponse);
   } catch (error) {
     console.error('Get all subscriptions error:', error);
@@ -81,6 +148,22 @@ export const createSubscription = async (req: Request, res: Response): Promise<v
       res.status(404).json({
         success: false,
         message: 'Student not found.'
+      } as ApiResponse);
+      return;
+    }
+
+    if (!student.parent_id) {
+      res.status(400).json({
+        success: false,
+        message: 'Student is not linked to a parent.'
+      } as ApiResponse);
+      return;
+    }
+
+    if (req.user?.role === UserRole.PARENT && student.parent_id.toString() !== req.user?.id) {
+      res.status(403).json({
+        success: false,
+        message: 'Access denied for this student.'
       } as ApiResponse);
       return;
     }

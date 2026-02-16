@@ -1,6 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../providers/subscription_provider.dart';
+import '../../../data/models/subscription_model.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../widgets/custom_button.dart';
@@ -31,8 +32,8 @@ class _CreateSubscriptionScreenState extends State<CreateSubscriptionScreen> {
 
   final Map<String, double> _subscriptionPrices = {
     'MONTHLY': 5000,
-    'QUARTERLY': 13500,
-    'YEARLY': 48000,
+    'QUARTERLY': 15000,
+    'YEARLY': 50000,
   };
 
   @override
@@ -69,10 +70,31 @@ class _CreateSubscriptionScreenState extends State<CreateSubscriptionScreen> {
           backgroundColor: AppColors.success,
         ),
       );
+      var pending = subscriptionProvider.getPendingSubscriptionForChild(widget.childId);
+      var subscriptionId = pending?.id;
+
+      if (subscriptionId == null || subscriptionId.isEmpty) {
+        await subscriptionProvider.fetchSubscriptionsByChild(widget.childId);
+        pending = subscriptionProvider.getPendingSubscriptionForChild(widget.childId);
+        subscriptionId = pending?.id;
+      }
+
+      if (subscriptionId == null || subscriptionId.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Impossible de recuperer l abonnement cree.'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+        return;
+      }
+      final resolvedSubscriptionId = subscriptionId!;
+
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (context) => PaymentScreen(
-            subscriptionId: 'temp_id', // Sera remplacé par l'ID réel
+            subscriptionId: resolvedSubscriptionId,
             amount: _amount,
             childId: widget.childId,
           ),
@@ -88,17 +110,17 @@ class _CreateSubscriptionScreenState extends State<CreateSubscriptionScreen> {
     }
   }
 
-  dynamic _parseSubscriptionType(String type) {
+  SubscriptionType _parseSubscriptionType(String type) {
     // Cette fonction sera adaptée selon votre modèle de données
     switch (type) {
       case 'MONTHLY':
-        return {'name': 'MONTHLY', 'displayName': 'Mensuel'};
+        return SubscriptionType.monthly;
       case 'QUARTERLY':
-        return {'name': 'QUARTERLY', 'displayName': 'Trimestriel'};
+        return SubscriptionType.quarterly;
       case 'YEARLY':
-        return {'name': 'YEARLY', 'displayName': 'Annuel'};
+        return SubscriptionType.yearly;
       default:
-        return {'name': 'MONTHLY', 'displayName': 'Mensuel'};
+        return SubscriptionType.monthly;
     }
   }
 
@@ -135,9 +157,21 @@ class _CreateSubscriptionScreenState extends State<CreateSubscriptionScreen> {
                 ..._subscriptionTypes.entries.map((entry) {
                   final type = entry.key;
                   final label = entry.value;
-                  final price = _subscriptionPrices[type];
+                  final price = _subscriptionPrices[type] ?? 0;
                   final isSelected = _selectedType == type;
-                  final hasDiscount = type != 'MONTHLY';
+                  final monthsCount = type == 'QUARTERLY'
+                      ? 3
+                      : type == 'YEARLY'
+                          ? 12
+                          : 1;
+                  final standardPrice = _subscriptionPrices['MONTHLY']! * monthsCount;
+                  final savings = standardPrice - price;
+                  final hasDiscount = savings > 0;
+                  final discountPercent = hasDiscount ? (savings / standardPrice) * 100 : 0;
+                  final isWholePercent = discountPercent == discountPercent.roundToDouble();
+                  final discountLabel = hasDiscount
+                      ? '-${discountPercent.toStringAsFixed(isWholePercent ? 0 : 1)}%'
+                      : '';
                   
                   return Container(
                     margin: const EdgeInsets.only(bottom: AppTheme.md),
@@ -185,7 +219,7 @@ class _CreateSubscriptionScreenState extends State<CreateSubscriptionScreen> {
                                       borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
                                     ),
                                     child: Text(
-                                      type == 'QUARTERLY' ? '-10%' : '-20%',
+                                      discountLabel,
                                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                         color: isSelected ? AppColors.primary : Colors.white,
                                         fontWeight: FontWeight.w600,
@@ -197,7 +231,7 @@ class _CreateSubscriptionScreenState extends State<CreateSubscriptionScreen> {
                             ),
                             const SizedBox(height: AppTheme.sm),
                             Text(
-                              _amount != null ? '${_amount.toStringAsFixed(0)} FCFA' : '0 FCFA',
+                              '${price.toStringAsFixed(0)} FCFA',
                               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                                 color: isSelected ? Colors.white : AppColors.textPrimary,
                                 fontWeight: FontWeight.w700,
@@ -206,9 +240,7 @@ class _CreateSubscriptionScreenState extends State<CreateSubscriptionScreen> {
                             if (hasDiscount) ...[
                               const SizedBox(height: AppTheme.xs),
                               Text(
-                                type == 'QUARTERLY' 
-                                  ? 'Au lieu de ${_subscriptionPrices['MONTHLY']! * 3} FCFA'
-                                  : 'Au lieu de ${_subscriptionPrices['MONTHLY']! * 12} FCFA',
+                                'Au lieu de ${standardPrice.toStringAsFixed(0)} FCFA',
                                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                   color: isSelected ? Colors.white.withOpacity(0.8) : AppColors.textSecondary,
                                   decoration: TextDecoration.lineThrough,
@@ -308,3 +340,6 @@ class _SummaryRow extends StatelessWidget {
     );
   }
 }
+
+
+
