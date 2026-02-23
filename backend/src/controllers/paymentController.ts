@@ -266,7 +266,7 @@ export const createPayment = async (req: Request, res: Response): Promise<void> 
     let verificationCode: string | undefined;
 
     if (method === 'CASH') {
-      paymentStatus = 'COMPLETED'; // Cash payments are immediately completed
+      paymentStatus = 'WAITING_ADMIN_VALIDATION'; // Cash payments require admin validation
     } else {
       paymentStatus = 'WAITING_ADMIN_VALIDATION'; // Other methods need admin validation
       verificationCode = Math.floor(1000 + Math.random() * 9000).toString(); // Generate 4-digit code
@@ -307,7 +307,9 @@ export const createPayment = async (req: Request, res: Response): Promise<void> 
       success: true,
       message: paymentStatus === 'COMPLETED' 
         ? 'Payment completed successfully. Subscription is now active.' 
-        : 'Payment created successfully. Subscription is pending admin validation.',
+        : method === 'CASH'
+          ? 'Cash payment submitted. Waiting for school/super admin validation.'
+          : 'Payment created successfully. Subscription is pending admin validation.',
       data: populatedPayment
     } as ApiResponse);
   } catch (error) {

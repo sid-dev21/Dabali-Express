@@ -239,7 +239,7 @@ const createPayment = async (req, res) => {
         let paymentStatus;
         let verificationCode;
         if (method === 'CASH') {
-            paymentStatus = 'COMPLETED'; // Cash payments are immediately completed
+            paymentStatus = 'WAITING_ADMIN_VALIDATION'; // Cash payments require admin validation
         }
         else {
             paymentStatus = 'WAITING_ADMIN_VALIDATION'; // Other methods need admin validation
@@ -273,7 +273,9 @@ const createPayment = async (req, res) => {
             success: true,
             message: paymentStatus === 'COMPLETED'
                 ? 'Payment completed successfully. Subscription is now active.'
-                : 'Payment created successfully. Subscription is pending admin validation.',
+                : method === 'CASH'
+                    ? 'Cash payment submitted. Waiting for school/super admin validation.'
+                    : 'Payment created successfully. Subscription is pending admin validation.',
             data: populatedPayment
         });
     }

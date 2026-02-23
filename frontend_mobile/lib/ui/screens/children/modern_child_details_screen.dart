@@ -697,7 +697,10 @@ class _ModernChildDetailsScreenState extends State<ModernChildDetailsScreen>
   void _createSubscription() {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => CreateSubscriptionScreen(childId: widget.child.id),
+        builder: (context) => CreateSubscriptionScreen(
+          childId: widget.child.id,
+          schoolId: widget.child.schoolId,
+        ),
       ),
     );
   }

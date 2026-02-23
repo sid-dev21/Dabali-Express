@@ -77,6 +77,16 @@ const formatPreparationDate = (dateKey: string | null): string => {
   });
 };
 
+const parseStoredArray = (raw: string | null): unknown[] => {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
 const Stock: React.FC<StockProps> = ({ schoolName, managerName }) => {
   const [stockRows, setStockRows] = useState<number[]>(() => [...DEFAULT_STOCK_ROWS]);
   const [openingQuantities, setOpeningQuantities] = useState<QuantityMap>(createEmptyQuantityMap);
@@ -308,13 +318,13 @@ const Stock: React.FC<StockProps> = ({ schoolName, managerName }) => {
   const handleSendReportToSchoolAdmin = () => {
     try {
       const reportPayload = buildReportPayload();
-      const sentReportsRaw = localStorage.getItem(SENT_REPORTS_STORAGE_KEY);
-      const sentReports = sentReportsRaw ? JSON.parse(sentReportsRaw) : [];
-      const nextReports = Array.isArray(sentReports) ? sentReports : [];
+      const nextReports = parseStoredArray(localStorage.getItem(SENT_REPORTS_STORAGE_KEY));
       nextReports.push(reportPayload);
       localStorage.setItem(SENT_REPORTS_STORAGE_KEY, JSON.stringify(nextReports));
+      window.dispatchEvent(new CustomEvent('stock-reports:updated'));
       setSaveMessage(`Rapport pret et envoye au School Admin le ${new Date().toLocaleString('fr-FR')}`);
-    } catch {
+    } catch (error) {
+      console.error('Stock report send error:', error);
       setSaveMessage('Erreur: envoi du rapport impossible pour le moment.');
     }
     setIsReportModalOpen(false);

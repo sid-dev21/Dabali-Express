@@ -6,16 +6,13 @@ import '../../../providers/auth_provider.dart';
 import '../../../providers/child_provider.dart';
 import '../../../providers/subscription_provider.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../data/models/menu.dart';
 import '../../../data/models/child_model.dart';
 import '../../../data/models/subscription_model.dart';
-import '../../../data/services/menu_service.dart';
-import '../../../data/services/modern_api_service.dart';
+import '../../../data/services/api_service.dart';
 import '../children/add_child_screen.dart';
 import '../payments/payment_screen.dart';
 import '../profile/profile_screen.dart';
 import '../notifications/notifications_screen.dart';
-import '../menus/menus_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -23,21 +20,15 @@ class HomeScreen extends StatefulWidget {
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
-
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late AnimationController _fadeController;
   late AnimationController _slideController;
-  late final MenuService _menuService;
   bool _isLoading = true;
-  bool _isLoadingMenu = false;
-  String? _menuError;
-  Menu? _todayMenu;
-  String? _lastMenuNotifiedId;
+  double _monthlyPaidAmount = 0;
 
   @override
   void initState() {
     super.initState();
-    _menuService = MenuService(ModernApiService());
     _fadeController = AnimationController(
       duration: const Duration(milliseconds: 600),
       vsync: this,
@@ -61,25 +52,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (!mounted) return;
     
     try {
-      // Charger les données des enfants et abonnements
+      // Charger les donnees des enfants et abonnements
       await Future.wait([
         context.read<ChildProvider>().fetchChildren(),
         context.read<SubscriptionProvider>().fetchSubscriptions(),
       ]);
+      await _loadMonthlyPaidAmount();
 
-      final children = context.read<ChildProvider>().children;
-      String? schoolId;
-      if (children.isNotEmpty) {
-        final preferredChild = children.firstWhere(
-          (child) => child.isApproved,
-          orElse: () => children.first,
-        );
-        schoolId = preferredChild.schoolId;
-      }
-      await _loadTodayMenu(schoolId);
     } catch (e) {
-      // Gérer l'erreur silencieusement pour l'instant
-      _menuError = 'Impossible de charger le menu du jour';
+      // Gerer l'erreur silencieusement pour l'instant
     } finally {
       if (mounted) {
         setState(() {
@@ -98,49 +79,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     await _loadData();
   }
 
-  Future<void> _loadTodayMenu(String? schoolId) async {
-    if (!mounted) return;
-    setState(() {
-      _isLoadingMenu = true;
-      _menuError = null;
-    });
-
-    try {
-      final response = await _menuService.getTodayMenu(schoolId: schoolId);
-      if (response.success && response.data != null) {
-        setState(() {
-          _todayMenu = response.data;
-        });
-
-        if (mounted && _todayMenu?.id.isNotEmpty == true && _todayMenu?.id != _lastMenuNotifiedId) {
-          _lastMenuNotifiedId = _todayMenu?.id;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Le menu du jour est disponible.'),
-              backgroundColor: AppColors.success,
-            ),
-          );
-        }
-      } else {
-        setState(() {
-          _todayMenu = null;
-          _menuError = response.message ?? 'Aucun menu validé pour aujourd\'hui';
-        });
-      }
-    } catch (_) {
-      setState(() {
-        _todayMenu = null;
-        _menuError = 'Aucun menu validé pour aujourd\'hui';
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoadingMenu = false;
-        });
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
@@ -150,18 +88,56 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final user = authProvider.currentUser;
     final children = childProvider.children;
     final knownChildIds = children.map((child) => child.id).toSet();
+    final now = DateTime.now();
     final subscriptions = subscriptionProvider.subscriptions
         .where((sub) => knownChildIds.contains(sub.childId))
         .toList();
-    final activeSubscriptions = _groupActiveSubscriptionsByChild(
-      subscriptions.where((s) => s.isActive).toList(),
-    );
-    final pendingSubscriptions = subscriptions.where((s) => s.isPendingPayment).toList();
-    final expiredSubscriptions = subscriptions.where((s) => s.isExpired).toList();
-    final monthlyEstimatedCost = subscriptions.fold<double>(
-      0,
-      (sum, sub) => sum + _estimateMonthlyCost(sub),
-    );
+    final groupedSubscriptions = _groupSubscriptionsByChild(subscriptions);
+    final activeSubscriptions = <SubscriptionModel>[];
+    final pendingSubscriptions = <SubscriptionModel>[];
+    final expiredSubscriptions = <SubscriptionModel>[];
+
+    for (final childSubscriptions in groupedSubscriptions.values) {
+      childSubscriptions.sort((a, b) => b.endDate.compareTo(a.endDate));
+
+      SubscriptionModel? active;
+      for (final subscription in childSubscriptions) {
+        if (_isSubscriptionActiveNow(subscription, now)) {
+          active = subscription;
+          break;
+        }
+      }
+      if (active != null) {
+        activeSubscriptions.add(active);
+        continue;
+      }
+
+      SubscriptionModel? pending;
+      for (final subscription in childSubscriptions) {
+        if (subscription.isPendingPayment) {
+          pending = subscription;
+          break;
+        }
+      }
+      if (pending != null) {
+        pendingSubscriptions.add(pending);
+        continue;
+      }
+
+      SubscriptionModel? expired;
+      for (final subscription in childSubscriptions) {
+        if (_isSubscriptionExpiredNow(subscription, now)) {
+          expired = subscription;
+          break;
+        }
+      }
+      if (expired != null) {
+        expiredSubscriptions.add(expired);
+      }
+    }
+
+    activeSubscriptions.sort((a, b) => a.endDate.compareTo(b.endDate));
+    final monthlyEstimatedCost = _monthlyPaidAmount;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -193,28 +169,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     ),
                   ),
                   
-                  const SliverToBoxAdapter(child: SizedBox(height: 32)),
-                  
-                  // Section Menu du Jour
-                  SliverToBoxAdapter(
-                    child: FadeTransition(
-                      opacity: _fadeController,
-                      child: _buildModernSectionHeader(
-                        'Menu du jour',
-                        'Voir la semaine',
-                        () => Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const MenusScreen()),
-                        ),
-                      ),
-                    ),
-                  ),
-                  SliverToBoxAdapter(
-                    child: FadeTransition(
-                      opacity: _fadeController,
-                      child: _buildModernMenuCard(),
-                    ),
-                  ),
                   const SliverToBoxAdapter(child: SizedBox(height: 32)),
 
                   SliverToBoxAdapter(
@@ -290,7 +244,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     required int pendingPayments,
   }) {
     final headerDate =
-        _todayMenu?.formattedDate ?? DateFormat('dd/MM/yyyy').format(DateTime.now());
+        DateFormat('dd/MM/yyyy').format(DateTime.now());
 
     return Container(
       margin: const EdgeInsets.all(20),
@@ -462,153 +416,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       borderRadius: BorderRadius.circular(radius),
       border: Border.all(color: AppColors.border),
       boxShadow: AppColors.cardShadow,
-    );
-  }
-
-  Widget _buildModernMenuCard() {
-    if (_isLoadingMenu) {
-      return Container(
-        margin: const EdgeInsets.symmetric(horizontal: 20),
-        padding: const EdgeInsets.all(20),
-        decoration: _surfaceDecoration(),
-        child: Row(
-          children: [
-            const CircularProgressIndicator(color: AppColors.primary),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Text(
-                'Chargement du menu du jour...',
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    if (_todayMenu == null) {
-      return Container(
-        margin: const EdgeInsets.symmetric(horizontal: 20),
-        padding: const EdgeInsets.all(20),
-        decoration: _surfaceDecoration(),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.warning.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                Icons.info_outline,
-                color: AppColors.warning,
-                size: 24,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Text(
-                _menuError ?? 'Aucun menu validé pour aujourd\'hui',
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    final menu = _todayMenu!;
-    final accompaniments = [
-      ...menu.sideDishes,
-      ...menu.fruits,
-      ...menu.drinks,
-    ].where((item) => item.trim().isNotEmpty).toList();
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      padding: const EdgeInsets.all(20),
-      decoration: _surfaceDecoration(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  Icons.restaurant_menu,
-                  color: AppColors.primary,
-                  size: 24,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Menu du jour',
-                      style: GoogleFonts.poppins(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    Text(
-                      menu.mainDish.isNotEmpty ? menu.mainDish : 'Menu validé',
-                      style: GoogleFonts.inter(
-                        fontSize: 14,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceAlt,
-              border: Border.all(color: AppColors.border),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Accompagnements',
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  accompaniments.isNotEmpty ? accompaniments.join(', ') : 'Aucun accompagnement renseigné',
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -788,7 +595,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
               Expanded(
                 child: _buildStatItem(
-                  'Cout mensuel',
+                  'Paye ce mois',
                   _formatAmount(monthlyCost),
                   Icons.attach_money,
                   AppColors.warning,
@@ -835,33 +642,83 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  List<SubscriptionModel> _groupActiveSubscriptionsByChild(
-    List<SubscriptionModel> activeSubscriptions,
+  Map<String, List<SubscriptionModel>> _groupSubscriptionsByChild(
+    List<SubscriptionModel> subscriptions,
   ) {
-    if (activeSubscriptions.isEmpty) return [];
-
-    final groupedByChild = <String, SubscriptionModel>{};
-    for (final subscription in activeSubscriptions) {
+    final groupedByChild = <String, List<SubscriptionModel>>{};
+    for (final subscription in subscriptions) {
       if (subscription.childId.isEmpty) continue;
-      final current = groupedByChild[subscription.childId];
-      if (current == null || subscription.endDate.isAfter(current.endDate)) {
-        groupedByChild[subscription.childId] = subscription;
-      }
+      groupedByChild.putIfAbsent(subscription.childId, () => []).add(subscription);
     }
-
-    final result = groupedByChild.values.toList()
-      ..sort((a, b) => a.endDate.compareTo(b.endDate));
-    return result;
+    return groupedByChild;
   }
 
-  double _estimateMonthlyCost(SubscriptionModel subscription) {
-    switch (subscription.type) {
-      case SubscriptionType.monthly:
-        return subscription.amount;
-      case SubscriptionType.quarterly:
-        return subscription.amount / 3;
-      case SubscriptionType.yearly:
-        return subscription.amount / 12;
+  bool _isSubscriptionActiveNow(SubscriptionModel subscription, DateTime now) {
+    if (subscription.isCancelled) return false;
+    if (subscription.endDate.isBefore(now)) return false;
+    return subscription.isActive;
+  }
+
+  bool _isSubscriptionExpiredNow(SubscriptionModel subscription, DateTime now) {
+    if (subscription.isCancelled) return false;
+    return subscription.isExpired || subscription.endDate.isBefore(now);
+  }
+
+  Future<void> _loadMonthlyPaidAmount() async {
+    final userId = context.read<AuthProvider>().currentUser?.id ?? '';
+    if (userId.trim().isEmpty) {
+      _monthlyPaidAmount = 0;
+      return;
+    }
+
+    final now = DateTime.now();
+    final monthStart = DateTime(now.year, now.month, 1);
+    final nextMonthStart = DateTime(now.year, now.month + 1, 1);
+
+    try {
+      final response = await ApiService().get(
+        '/payments',
+        queryParameters: {
+          'parent_id': userId,
+          'status': 'COMPLETED',
+        },
+      );
+
+      final body = response.data;
+      if (body is! Map<String, dynamic> || body['success'] != true) {
+        _monthlyPaidAmount = 0;
+        return;
+      }
+
+      final data = body['data'];
+      if (data is! List) {
+        _monthlyPaidAmount = 0;
+        return;
+      }
+
+      double monthlyTotal = 0;
+      for (final row in data) {
+        if (row is! Map<String, dynamic>) continue;
+
+        final timestampRaw = row['paid_at'] ??
+            row['paidAt'] ??
+            row['created_at'] ??
+            row['createdAt'];
+        final timestamp = DateTime.tryParse((timestampRaw ?? '').toString());
+        if (timestamp == null) continue;
+        final paymentDate = timestamp.toLocal();
+        if (paymentDate.isBefore(monthStart) || !paymentDate.isBefore(nextMonthStart)) continue;
+
+        final amountRaw = row['amount'];
+        final amount = amountRaw is num
+            ? amountRaw.toDouble()
+            : double.tryParse(amountRaw?.toString() ?? '') ?? 0;
+        monthlyTotal += amount;
+      }
+
+      _monthlyPaidAmount = monthlyTotal;
+    } catch (_) {
+      _monthlyPaidAmount = 0;
     }
   }
 

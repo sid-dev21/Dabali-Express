@@ -1,6 +1,7 @@
 ﻿import React, { useMemo, useState, useEffect } from 'react';
 import { FileText, Send, ClipboardCheck, Trash2 } from 'lucide-react';
 import { attendanceApi, menuApi, paymentsApi, studentsApi, subscriptionsApi } from '../services/api';
+import { authStorage } from '../utils/authStorage';
 
 interface StockItem {
   label: string;
@@ -208,6 +209,15 @@ const toNumber = (value: string) => {
   return normalized ? Number(normalized) : 0;
 };
 
+const safeParseJson = <T,>(raw: string | null, fallback: T): T => {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+};
+
 const formatNumber = (value: number) => {
   return new Intl.NumberFormat('fr-FR').format(value);
 };
@@ -357,19 +367,19 @@ const toIncomingReport = (raw: RawStockReport, index: number, statusMap: Record<
   const id = raw.reportId || `REP-STOCK-${index + 1}-${generatedAt}`;
 
   const stock: StockItem[] = STOCK_KEYS.map((key) => {
-    const opening = asNumber(raw.opening[key]);
-    const received = asNumber(raw.received[key]);
+    const opening = asNumber(raw?.opening?.[key]);
+    const received = asNumber(raw?.received?.[key]);
     const consumed = sumOutgoing(rows, key);
     const remaining = lastRemaining(rows, key);
-    const start = opening ?? firstAvailable(rows, key);
+    const start = opening ?? firstAvailable(rows, key) ?? 0;
 
     return {
       label: STOCK_LABELS[key],
       unit: STOCK_UNITS[key],
       start,
-      received,
-      consumed,
-      remaining
+      received: received ?? 0,
+      consumed: consumed ?? 0,
+      remaining: remaining ?? 0
     };
   });
 
@@ -408,7 +418,7 @@ const CanteenReports: React.FC<CanteenReportsProps> = ({ schoolId, schoolName, a
   const resolvedSchoolId = useMemo(() => {
     if (schoolId) return schoolId;
     try {
-      const raw = localStorage.getItem('current_user');
+      const raw = authStorage.getCurrentUserRaw();
       if (!raw) return '';
       const parsed = JSON.parse(raw);
       return String(parsed?.schoolId || parsed?.school_id || '').trim();
@@ -424,45 +434,53 @@ const CanteenReports: React.FC<CanteenReportsProps> = ({ schoolId, schoolName, a
 
   useEffect(() => {
     const loadIncomingReports = () => {
-      try {
-        const rawReports = localStorage.getItem(STOCK_SENT_REPORTS_STORAGE_KEY);
-        const rawStatus = localStorage.getItem(SCHOOL_ADMIN_REPORTS_STATUS_KEY);
-        const rawEdits = localStorage.getItem(SCHOOL_ADMIN_REPORTS_EDITS_KEY);
-        const rawDeleted = localStorage.getItem(SCHOOL_ADMIN_REPORTS_DELETED_KEY);
-        const parsedReports: RawStockReport[] = rawReports ? JSON.parse(rawReports) : [];
-        const statusMap: Record<string, IncomingReport['status']> = rawStatus ? JSON.parse(rawStatus) : {};
-        const editsMap: ReportEditsMap = rawEdits ? JSON.parse(rawEdits) : {};
-        const deletedIds = rawDeleted ? JSON.parse(rawDeleted) : [];
-        const deletedSet = new Set(
-          (Array.isArray(deletedIds) ? deletedIds : []).map((id) => String(id))
-        );
+      const parsedReports = safeParseJson<RawStockReport[]>(
+        localStorage.getItem(STOCK_SENT_REPORTS_STORAGE_KEY),
+        []
+      );
+      const statusMap = safeParseJson<Record<string, IncomingReport['status']>>(
+        localStorage.getItem(SCHOOL_ADMIN_REPORTS_STATUS_KEY),
+        {}
+      );
+      const editsMap = safeParseJson<ReportEditsMap>(
+        localStorage.getItem(SCHOOL_ADMIN_REPORTS_EDITS_KEY),
+        {}
+      );
+      const deletedIds = safeParseJson<unknown[]>(
+        localStorage.getItem(SCHOOL_ADMIN_REPORTS_DELETED_KEY),
+        []
+      );
+      const deletedSet = new Set(
+        (Array.isArray(deletedIds) ? deletedIds : []).map((id) => String(id))
+      );
 
-        if (!Array.isArray(parsedReports) || parsedReports.length === 0) {
-          setReports([]);
-          return;
-        }
-
-        const mapped = parsedReports
-          .map((report, index) => toIncomingReport(report, index, statusMap))
-          .map((report) => {
-            const edits = editsMap[report.id];
-            if (!edits?.stock) return report;
-            return { ...report, stock: edits.stock };
-          })
-          .filter((report) => !deletedSet.has(report.id))
-          .filter(isIncomingReport)
-          .reverse();
-
-        setReports(mapped);
-      } catch {
+      if (!Array.isArray(parsedReports) || parsedReports.length === 0) {
         setReports([]);
+        return;
       }
+
+      const mapped = parsedReports
+        .map((report, index) => toIncomingReport(report, index, statusMap))
+        .map((report) => {
+          const edits = editsMap[report.id];
+          if (!edits?.stock) return report;
+          return { ...report, stock: edits.stock };
+        })
+        .filter((report) => !deletedSet.has(report.id))
+        .filter(isIncomingReport)
+        .reverse();
+
+      setReports(mapped);
     };
 
     loadIncomingReports();
     const onStorage = () => loadIncomingReports();
     window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
+    window.addEventListener('stock-reports:updated', onStorage as EventListener);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('stock-reports:updated', onStorage as EventListener);
+    };
   }, []);
 
   useEffect(() => {

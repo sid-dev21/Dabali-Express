@@ -64,15 +64,15 @@ class _AddChildScreenState extends State<AddChildScreen> {
         if (mounted) {
           setState(() {
             _schoolsError = data is Map<String, dynamic>
-                ? (data['message'] as String? ?? 'Erreur de chargement des Ã©coles')
-                : 'Erreur de chargement des Ã©coles';
+                ? (data['message'] as String? ?? 'Erreur de chargement des écoles')
+                : 'Erreur de chargement des écoles';
           });
         }
       }
     } catch (_) {
       if (mounted) {
         setState(() {
-          _schoolsError = 'Impossible de charger la liste des Ã©coles';
+          _schoolsError = 'Impossible de charger la liste des écoles';
         });
       }
     } finally {
@@ -240,18 +240,18 @@ class _AddChildScreenState extends State<AddChildScreen> {
                 
                 const SizedBox(height: AppTheme.xl),
                 
-                // Nom et PrÃ©nom modernes
+                // Nom et prénom modernes
                 Row(
                   children: [
                     Expanded(
                       child: ModernTextField(
                         controller: _firstNameController,
-                        label: 'PrÃ©nom',
+                        label: 'Prénom',
                         hintText: 'Boureima',
                         prefixIcon: Icons.person_outline,
                         validator: (value) {
                           if (value == null || value.isEmpty) {
-                            return 'Veuillez entrer le prÃ©nom';
+                            return 'Veuillez entrer le prénom';
                           }
                           return null;
                         },
@@ -326,15 +326,15 @@ class _AddChildScreenState extends State<AddChildScreen> {
                 
                 const SizedBox(height: AppTheme.lg),
 
-                // Code Ã©lÃ¨ve (matricule)
+                // Code élève (matricule)
                 ModernTextField(
                   controller: _studentCodeController,
-                  label: 'Code Ã©lÃ¨ve (matricule)',
+                  label: 'Code élève (matricule)',
                   hintText: 'EX: CM1-025',
                   prefixIcon: Icons.badge_outlined,
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
-                      return 'Veuillez entrer le code Ã©lÃ¨ve';
+                      return 'Veuillez entrer le code élève';
                     }
                     return null;
                   },
@@ -342,7 +342,7 @@ class _AddChildScreenState extends State<AddChildScreen> {
                 
                 const SizedBox(height: AppTheme.lg),
                 
-                // Ã‰cole moderne
+                // École moderne
                 Container(
                   decoration: BoxDecoration(
                     color: AppColors.surface,
@@ -356,8 +356,8 @@ class _AddChildScreenState extends State<AddChildScreen> {
                   child: DropdownButtonFormField<String>(
                     value: _selectedSchoolId,
                     decoration: InputDecoration(
-                      labelText: 'Ã‰cole',
-                      hintText: _isLoadingSchools ? 'Chargement...' : 'SÃ©lectionner une Ã©cole',
+                      labelText: 'École',
+                      hintText: _isLoadingSchools ? 'Chargement...' : 'Sélectionner une école',
                       prefixIcon: const Icon(Icons.school_outlined, color: AppColors.textTertiary),
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(
@@ -410,10 +410,10 @@ class _AddChildScreenState extends State<AddChildScreen> {
                     },
                     validator: (value) {
                       if (_schools.isEmpty) {
-                        return _schoolsError ?? 'Aucune Ã©cole disponible';
+                        return _schoolsError ?? 'Aucune école disponible';
                       }
                       if (value == null || value.isEmpty) {
-                        return 'Veuillez sÃ©lectionner une Ã©cole';
+                        return 'Veuillez sélectionner une école';
                       }
                       return null;
                     },

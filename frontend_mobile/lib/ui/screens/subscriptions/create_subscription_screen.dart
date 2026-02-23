@@ -1,17 +1,23 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../providers/child_provider.dart';
 import '../../../providers/subscription_provider.dart';
 import '../../../data/models/subscription_model.dart';
+import '../../../data/services/api_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../widgets/custom_button.dart';
-import '../../widgets/custom_text_field.dart';
 import '../payments/payment_screen.dart';
 
 class CreateSubscriptionScreen extends StatefulWidget {
   final String childId;
+  final String? schoolId;
 
-  const CreateSubscriptionScreen({super.key, required this.childId});
+  const CreateSubscriptionScreen({
+    super.key,
+    required this.childId,
+    this.schoolId,
+  });
 
   @override
   State<CreateSubscriptionScreen> createState() => _CreateSubscriptionScreenState();
@@ -19,10 +25,12 @@ class CreateSubscriptionScreen extends StatefulWidget {
 
 class _CreateSubscriptionScreenState extends State<CreateSubscriptionScreen> {
   final _formKey = GlobalKey<FormState>();
-  
+  final ApiService _apiService = ApiService();
+
   String? _selectedType;
   double _amount = 0;
   bool _isLoading = false;
+  bool _isTariffsLoading = false;
 
   final Map<String, String> _subscriptionTypes = {
     'MONTHLY': 'Mensuel',
@@ -30,7 +38,7 @@ class _CreateSubscriptionScreenState extends State<CreateSubscriptionScreen> {
     'YEARLY': 'Annuel',
   };
 
-  final Map<String, double> _subscriptionPrices = {
+  Map<String, double> _subscriptionPrices = {
     'MONTHLY': 5000,
     'QUARTERLY': 15000,
     'YEARLY': 50000,
@@ -41,12 +49,73 @@ class _CreateSubscriptionScreenState extends State<CreateSubscriptionScreen> {
     super.initState();
     _selectedType = 'MONTHLY';
     _amount = _subscriptionPrices['MONTHLY']!;
+    _loadTariffs();
   }
 
   void _calculateAmount(String type) {
-    setState(() {
-      _amount = _subscriptionPrices[type] ?? 0;
-    });
+    _amount = _subscriptionPrices[type] ?? 0;
+  }
+
+  String _resolveSchoolId() {
+    final fromWidget = (widget.schoolId ?? '').trim();
+    if (fromWidget.isNotEmpty) return fromWidget;
+
+    try {
+      final childProvider = Provider.of<ChildProvider>(context, listen: false);
+      final child = childProvider.getChildById(widget.childId);
+      final fromChild = (child?.schoolId ?? '').trim();
+      if (fromChild.isNotEmpty) return fromChild;
+    } catch (_) {
+      // ChildProvider may not be available on some navigation stacks.
+    }
+
+    return '';
+  }
+
+  double _toPositiveAmount(dynamic value, double fallback) {
+    final parsed = double.tryParse(value?.toString() ?? '');
+    if (parsed == null || parsed <= 0) return fallback;
+    return parsed;
+  }
+
+  Future<void> _loadTariffs() async {
+    final schoolId = _resolveSchoolId();
+    if (schoolId.isEmpty) return;
+
+    setState(() => _isTariffsLoading = true);
+    try {
+      final response = await _apiService.get('/schools/$schoolId/tariffs');
+      final body = response.data;
+      if (body is! Map<String, dynamic> || body['success'] != true) {
+        return;
+      }
+      final payload = body['data'];
+      if (payload is! Map<String, dynamic>) {
+        return;
+      }
+      final rates = payload['rates'];
+      if (rates is! Map<String, dynamic>) {
+        return;
+      }
+
+      final nextPrices = <String, double>{
+        'MONTHLY': _toPositiveAmount(rates['monthly'], _subscriptionPrices['MONTHLY'] ?? 5000),
+        'QUARTERLY': _toPositiveAmount(rates['quarterly'], _subscriptionPrices['QUARTERLY'] ?? 15000),
+        'YEARLY': _toPositiveAmount(rates['yearly'], _subscriptionPrices['YEARLY'] ?? 50000),
+      };
+
+      if (!mounted) return;
+      setState(() {
+        _subscriptionPrices = nextPrices;
+        _calculateAmount(_selectedType ?? 'MONTHLY');
+      });
+    } catch (_) {
+      // Keep fallback values when tariffs endpoint is unavailable.
+    } finally {
+      if (mounted) {
+        setState(() => _isTariffsLoading = false);
+      }
+    }
   }
 
   Future<void> _handleCreateSubscription() async {
@@ -66,7 +135,7 @@ class _CreateSubscriptionScreenState extends State<CreateSubscriptionScreen> {
     if (success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Abonnement créé avec succès!'),
+          content: Text('Abonnement cree avec succes!'),
           backgroundColor: AppColors.success,
         ),
       );
@@ -89,12 +158,12 @@ class _CreateSubscriptionScreenState extends State<CreateSubscriptionScreen> {
         );
         return;
       }
-      final resolvedSubscriptionId = subscriptionId!;
+      final resolvedSubscriptionId = subscriptionId;
 
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (context) => PaymentScreen(
-            subscriptionId: resolvedSubscriptionId,
+            subscriptionId: resolvedSubscriptionId!,
             amount: _amount,
             childId: widget.childId,
           ),
@@ -103,7 +172,7 @@ class _CreateSubscriptionScreenState extends State<CreateSubscriptionScreen> {
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(subscriptionProvider.errorMessage ?? 'Erreur lors de la création'),
+          content: Text(subscriptionProvider.errorMessage ?? 'Erreur lors de la creation'),
           backgroundColor: AppColors.error,
         ),
       );
@@ -111,7 +180,6 @@ class _CreateSubscriptionScreenState extends State<CreateSubscriptionScreen> {
   }
 
   SubscriptionType _parseSubscriptionType(String type) {
-    // Cette fonction sera adaptée selon votre modèle de données
     switch (type) {
       case 'MONTHLY':
         return SubscriptionType.monthly;
@@ -129,7 +197,7 @@ class _CreateSubscriptionScreenState extends State<CreateSubscriptionScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Créer un abonnement'),
+        title: const Text('Creer un abonnement'),
         backgroundColor: AppColors.surface,
         elevation: 0,
       ),
@@ -142,7 +210,7 @@ class _CreateSubscriptionScreenState extends State<CreateSubscriptionScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: AppTheme.md),
-                
+
                 Text(
                   'Choisissez le type d\'abonnement',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
@@ -150,10 +218,18 @@ class _CreateSubscriptionScreenState extends State<CreateSubscriptionScreen> {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                
+                const SizedBox(height: AppTheme.sm),
+                Text(
+                  _isTariffsLoading
+                      ? 'Chargement des tarifs de votre ecole...'
+                      : 'Les tarifs affiches sont ceux configures par votre ecole.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+
                 const SizedBox(height: AppTheme.lg),
-                
-                // Types d'abonnement
+
                 ..._subscriptionTypes.entries.map((entry) {
                   final type = entry.key;
                   final label = entry.value;
@@ -164,15 +240,15 @@ class _CreateSubscriptionScreenState extends State<CreateSubscriptionScreen> {
                       : type == 'YEARLY'
                           ? 12
                           : 1;
-                  final standardPrice = _subscriptionPrices['MONTHLY']! * monthsCount;
-                  final savings = standardPrice - price;
+                  final standardPrice = (_subscriptionPrices['MONTHLY'] ?? 0) * monthsCount;
+                  final savings = standardPrice > 0 ? (standardPrice - price) : 0;
                   final hasDiscount = savings > 0;
                   final discountPercent = hasDiscount ? (savings / standardPrice) * 100 : 0;
                   final isWholePercent = discountPercent == discountPercent.roundToDouble();
                   final discountLabel = hasDiscount
                       ? '-${discountPercent.toStringAsFixed(isWholePercent ? 0 : 1)}%'
                       : '';
-                  
+
                   return Container(
                     margin: const EdgeInsets.only(bottom: AppTheme.md),
                     child: InkWell(
@@ -253,10 +329,9 @@ class _CreateSubscriptionScreenState extends State<CreateSubscriptionScreen> {
                     ),
                   );
                 }).toList(),
-                
+
                 const SizedBox(height: AppTheme.xl),
-                
-                // Récapitulatif
+
                 Container(
                   padding: const EdgeInsets.all(AppTheme.lg),
                   decoration: BoxDecoration(
@@ -268,7 +343,7 @@ class _CreateSubscriptionScreenState extends State<CreateSubscriptionScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Récapitulatif',
+                        'Recapitulatif',
                         style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           color: AppColors.textPrimary,
                           fontWeight: FontWeight.w600,
@@ -277,24 +352,23 @@ class _CreateSubscriptionScreenState extends State<CreateSubscriptionScreen> {
                       const SizedBox(height: AppTheme.md),
                       _SummaryRow(
                         label: 'Type d\'abonnement',
-                        value: _subscriptionTypes[_selectedType] ?? 'Non sélectionné',
+                        value: _subscriptionTypes[_selectedType] ?? 'Non selectionne',
                       ),
                       const SizedBox(height: AppTheme.sm),
                       _SummaryRow(
-                        label: 'Montant à payer',
+                        label: 'Montant a payer',
                         value: '${_amount.toStringAsFixed(0)} FCFA',
                         isAmount: true,
                       ),
                     ],
                   ),
                 ),
-                
+
                 const SizedBox(height: AppTheme.xl),
-                
-                // Bouton de création
+
                 CustomButton(
                   text: 'Continuer',
-                  onPressed: _handleCreateSubscription,
+                  onPressed: _isTariffsLoading ? null : _handleCreateSubscription,
                   isLoading: _isLoading,
                   fullWidth: true,
                 ),
@@ -340,6 +414,3 @@ class _SummaryRow extends StatelessWidget {
     );
   }
 }
-
-
-

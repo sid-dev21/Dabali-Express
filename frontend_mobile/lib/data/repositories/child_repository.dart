@@ -44,6 +44,55 @@ class ChildRepository {
     return trimmed;
   }
 
+  bool _isValidDateParts(int year, int month, int day) {
+    if (year < 1900 || year > 2100) return false;
+    if (month < 1 || month > 12) return false;
+    if (day < 1) return false;
+    final lastDayOfMonth = DateTime(year, month + 1, 0).day;
+    return day <= lastDayOfMonth;
+  }
+
+  String _formatDateParts(int year, int month, int day) {
+    final yyyy = year.toString().padLeft(4, '0');
+    final mm = month.toString().padLeft(2, '0');
+    final dd = day.toString().padLeft(2, '0');
+    return '$yyyy-$mm-$dd';
+  }
+
+  String? _normalizeBirthDateInput(String input) {
+    final raw = input.trim();
+    if (raw.isEmpty) return null;
+
+    final isoMatch = RegExp(r'^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$').firstMatch(raw);
+    if (isoMatch != null) {
+      final year = int.tryParse(isoMatch.group(1) ?? '');
+      final month = int.tryParse(isoMatch.group(2) ?? '');
+      final day = int.tryParse(isoMatch.group(3) ?? '');
+      if (year != null && month != null && day != null && _isValidDateParts(year, month, day)) {
+        return _formatDateParts(year, month, day);
+      }
+      return null;
+    }
+
+    final frMatch = RegExp(r'^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$').firstMatch(raw);
+    if (frMatch != null) {
+      final day = int.tryParse(frMatch.group(1) ?? '');
+      final month = int.tryParse(frMatch.group(2) ?? '');
+      final year = int.tryParse(frMatch.group(3) ?? '');
+      if (year != null && month != null && day != null && _isValidDateParts(year, month, day)) {
+        return _formatDateParts(year, month, day);
+      }
+      return null;
+    }
+
+    final parsed = DateTime.tryParse(raw);
+    if (parsed != null) {
+      return _formatDateParts(parsed.year, parsed.month, parsed.day);
+    }
+
+    return null;
+  }
+
   // ===== GET CHILDREN =====
   Future<List<ChildModel>> getChildren() async {
     try {
@@ -114,12 +163,20 @@ class ChildRepository {
       final trimmedClassName = className.trim();
       final trimmedStudentCode = studentCode?.trim();
       final trimmedSchoolId = schoolId?.trim();
+      final normalizedBirthDate = _normalizeBirthDateInput(trimmedDateOfBirth);
+
+      if (normalizedBirthDate == null) {
+        return {
+          'success': false,
+          'message': 'Date de naissance invalide. Utilisez JJ/MM/AAAA ou AAAA-MM-JJ.',
+        };
+      }
 
       final payload = <String, dynamic>{
         'first_name': trimmedFirstName,
         'last_name': trimmedLastName,
-        'date_of_birth': trimmedDateOfBirth,
-        'birth_date': trimmedDateOfBirth,
+        'date_of_birth': normalizedBirthDate,
+        'birth_date': normalizedBirthDate,
         'class_name': trimmedClassName,
         'grade': trimmedClassName,
       };

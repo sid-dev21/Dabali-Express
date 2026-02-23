@@ -18,8 +18,8 @@ const router = Router();
 // All routes require authentication
 router.use(authMiddleware);
 
-// Get all students (SCHOOL_ADMIN, CANTEEN_MANAGER)
-router.get('/', requireRole(UserRole.SCHOOL_ADMIN, UserRole.CANTEEN_MANAGER), getAllStudents);
+// Get all students (SCHOOL_ADMIN, CANTEEN_MANAGER, SUPER_ADMIN)
+router.get('/', requireRole(UserRole.SCHOOL_ADMIN, UserRole.CANTEEN_MANAGER, UserRole.SUPER_ADMIN), getAllStudents);
 
 // Get students by parent (PARENT only - for their own children)
 router.get('/parent/:parentId', requireRole(UserRole.PARENT), getStudentsByParent);

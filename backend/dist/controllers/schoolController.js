@@ -38,7 +38,7 @@ exports.getPublicSchools = getPublicSchools;
 const getAllSchools = async (req, res) => {
     try {
         const schools = await School_1.default.find()
-            .populate('admin_id', 'first_name last_name email')
+            .populate('admin_id', 'first_name last_name email phone')
             .sort({ name: 1 });
         res.json({
             success: true,
@@ -59,7 +59,7 @@ const getSchoolById = async (req, res) => {
     try {
         const { id } = req.params;
         const school = await School_1.default.findById(id)
-            .populate('admin_id', 'first_name last_name email');
+            .populate('admin_id', 'first_name last_name email phone');
         if (!school) {
             res.status(404).json({
                 success: false,
@@ -178,7 +178,7 @@ const createSchool = async (req, res) => {
         }
         // Return populated school
         const populatedSchool = await School_1.default.findById(school._id)
-            .populate('admin_id', 'first_name last_name email');
+            .populate('admin_id', 'first_name last_name email phone');
         res.status(201).json({
             success: true,
             message: createWithAdmin ? 'School and admin created successfully.' : 'School created successfully.',
@@ -216,7 +216,7 @@ const updateSchool = async (req, res) => {
                 return;
             }
         }
-        const school = await School_1.default.findByIdAndUpdate(id, { ...updates, updated_at: new Date() }, { new: true, runValidators: true }).populate('admin_id', 'first_name last_name email');
+        const school = await School_1.default.findByIdAndUpdate(id, { ...updates, updated_at: new Date() }, { new: true, runValidators: true }).populate('admin_id', 'first_name last_name email phone');
         if (!school) {
             res.status(404).json({
                 success: false,

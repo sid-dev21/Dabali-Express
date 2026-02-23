@@ -35,7 +35,7 @@ export const getPublicSchools = async (_req: Request, res: Response): Promise<vo
 export const getAllSchools = async (req: Request, res: Response): Promise<void> => {
   try {
     const schools = await School.find()
-      .populate('admin_id', 'first_name last_name email')
+      .populate('admin_id', 'first_name last_name email phone')
       .sort({ name: 1 });
 
     res.json({
@@ -57,7 +57,7 @@ export const getSchoolById = async (req: Request, res: Response): Promise<void> 
     const { id } = req.params;
 
     const school = await School.findById(id)
-      .populate('admin_id', 'first_name last_name email');
+      .populate('admin_id', 'first_name last_name email phone');
 
     if (!school) {
       res.status(404).json({
@@ -193,7 +193,7 @@ export const createSchool = async (req: Request, res: Response): Promise<void> =
 
     // Return populated school
     const populatedSchool = await School.findById(school._id)
-      .populate('admin_id', 'first_name last_name email');
+      .populate('admin_id', 'first_name last_name email phone');
 
     res.status(201).json({
       success: true,
@@ -238,7 +238,7 @@ export const updateSchool = async (req: Request, res: Response): Promise<void> =
       id,
       { ...updates, updated_at: new Date() },
       { new: true, runValidators: true }
-    ).populate('admin_id', 'first_name last_name email');
+    ).populate('admin_id', 'first_name last_name email phone');
 
     if (!school) {
       res.status(404).json({

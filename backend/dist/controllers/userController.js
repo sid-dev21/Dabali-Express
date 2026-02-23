@@ -308,10 +308,10 @@ const createUser = async (req, res) => {
         const { first_name, last_name, email, role, school_id } = req.body;
         const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
         const allowedRoles = ['SCHOOL_ADMIN', 'CANTEEN_MANAGER', 'PARENT'];
-        if (!first_name || !last_name || !normalizedEmail || !role) {
+        if (!first_name || !last_name || !role) {
             res.status(400).json({
                 success: false,
-                message: 'first_name, last_name, email, and role are required.',
+                message: 'first_name, last_name, and role are required.',
             });
             return;
         }
@@ -322,15 +322,8 @@ const createUser = async (req, res) => {
             });
             return;
         }
-        const existingUser = await User_1.default.findOne({ email: normalizedEmail });
-        if (existingUser) {
-            res.status(400).json({
-                success: false,
-                message: 'A user with this email already exists.',
-            });
-            return;
-        }
         let resolvedSchoolId = school_id || undefined;
+        let resolvedSchool = null;
         if (role === 'SCHOOL_ADMIN' || role === 'CANTEEN_MANAGER') {
             if (!resolvedSchoolId) {
                 res.status(400).json({
@@ -339,8 +332,8 @@ const createUser = async (req, res) => {
                 });
                 return;
             }
-            const school = await School_1.default.findById(resolvedSchoolId);
-            if (!school) {
+            resolvedSchool = await School_1.default.findById(resolvedSchoolId);
+            if (!resolvedSchool) {
                 res.status(404).json({
                     success: false,
                     message: 'School not found.',
@@ -351,12 +344,53 @@ const createUser = async (req, res) => {
         else {
             resolvedSchoolId = undefined;
         }
+        const sanitizePart = (value) => String(value || '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '.')
+            .replace(/^\.+|\.+$/g, '');
+        const generateSchoolAdminEmail = async () => {
+            const firstPart = sanitizePart(first_name) || 'admin';
+            const lastPart = sanitizePart(last_name) || 'user';
+            const schoolPart = sanitizePart(resolvedSchool?.name || 'school') || 'school';
+            const localBase = `admin.${firstPart}.${lastPart}`;
+            const domainBase = `${schoolPart}.dabali.bf`;
+            for (let index = 0; index < 200; index += 1) {
+                const suffix = index === 0 ? '' : `.${index + 1}`;
+                const candidate = `${localBase}${suffix}@${domainBase}`;
+                const existing = await User_1.default.findOne({ email: candidate }).select('_id');
+                if (!existing)
+                    return candidate;
+            }
+            const random = Math.random().toString(36).slice(2, 8);
+            return `${localBase}.${random}@${domainBase}`;
+        };
+        let resolvedEmail = normalizedEmail;
+        if (!resolvedEmail) {
+            if (role !== 'SCHOOL_ADMIN') {
+                res.status(400).json({
+                    success: false,
+                    message: 'Email is required for this role.',
+                });
+                return;
+            }
+            resolvedEmail = await generateSchoolAdminEmail();
+        }
+        const existingUser = await User_1.default.findOne({ email: resolvedEmail });
+        if (existingUser) {
+            res.status(400).json({
+                success: false,
+                message: 'A user with this email already exists.',
+            });
+            return;
+        }
         const temporaryPassword = generateTemporaryPassword();
         const hashedPassword = await bcryptjs_1.default.hash(temporaryPassword, 10);
         const user = new User_1.default({
             first_name,
             last_name,
-            email: normalizedEmail,
+            email: resolvedEmail,
             password: hashedPassword,
             role,
             school_id: resolvedSchoolId,
@@ -377,6 +411,7 @@ const createUser = async (req, res) => {
             data: {
                 user: userWithoutPassword,
                 temporary_password: temporaryPassword,
+                email_generated: !normalizedEmail,
             },
         });
     }

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Edit, Shield, X, Check, Search, UserPlus, Copy, Mail, MessageSquare, Trash2 } from 'lucide-react';
 import { authApi, schoolsApi } from '../services/api';
 import { UserRole, School } from '../types';
+import { authStorage } from '../utils/authStorage';
 
 interface CanteenManager {
   id: string;
@@ -95,7 +96,7 @@ const CanteenManagers: React.FC<CanteenManagersProps> = ({ initialSearch = '' })
             schoolId: matchedSchool.id,
             schoolName: matchedSchool.name
           };
-          localStorage.setItem('current_user', JSON.stringify(resolvedUser));
+          authStorage.setCurrentUserRaw(JSON.stringify(resolvedUser));
         }
       }
 
@@ -106,7 +107,7 @@ const CanteenManagers: React.FC<CanteenManagersProps> = ({ initialSearch = '' })
             ...resolvedUser,
             schoolName: schoolMatch.name
           };
-          localStorage.setItem('current_user', JSON.stringify(resolvedUser));
+          authStorage.setCurrentUserRaw(JSON.stringify(resolvedUser));
         }
       }
 
@@ -123,7 +124,7 @@ const CanteenManagers: React.FC<CanteenManagersProps> = ({ initialSearch = '' })
   };
 
   const getCurrentUserFromStorage = () => {
-    const storedUser = localStorage.getItem('current_user');
+    const storedUser = authStorage.getCurrentUserRaw();
     return storedUser ? JSON.parse(storedUser) : null;
   };
 
@@ -134,9 +135,10 @@ const CanteenManagers: React.FC<CanteenManagersProps> = ({ initialSearch = '' })
   ) => {
     try {
       // Utiliser le bon endpoint avec le school_id en paramètre
+      const authToken = authStorage.getToken();
       const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/users/canteen-managers/school/${schoolId}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
         },
       });
 
@@ -189,8 +191,8 @@ const CanteenManagers: React.FC<CanteenManagersProps> = ({ initialSearch = '' })
     // AUDIT COMPLET - ÉTAPE 1: Vérification de base
     console.log('=== AUDIT COMPLET CRÉATION GESTIONNAIRE ===');
     
-    const token = localStorage.getItem('auth_token');
-    const storedUser = localStorage.getItem('current_user');
+    const token = authStorage.getToken();
+    const storedUser = authStorage.getCurrentUserRaw();
     
     console.log('1. ÉTAT LOCAL STORAGE:');
     console.log('   - Token présent:', !!token);
@@ -326,10 +328,11 @@ const CanteenManagers: React.FC<CanteenManagersProps> = ({ initialSearch = '' })
     if (!confirm('Êtes-vous sûr de vouloir supprimer ce gestionnaire ?')) return;
 
     try {
+      const authToken = authStorage.getToken();
       const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/users/canteen-managers/${managerId}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
         },
       });
 

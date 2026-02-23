@@ -1,4 +1,5 @@
 import { User, School, Student, Payment, MenuItem, UserRole } from '../types';
+import { authStorage } from '../utils/authStorage';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -14,8 +15,8 @@ const AUTH_PUBLIC_ENDPOINTS = ['/auth/login', '/auth/register'];
 let unauthorizedEventQueued = false;
 
 const clearStoredSession = () => {
-  localStorage.removeItem('auth_token');
-  localStorage.removeItem('current_user');
+  authStorage.clearSession();
+  authStorage.clearLegacyLocalStorage();
 };
 
 const dispatchUnauthorizedEvent = (endpoint: string, message: string) => {
@@ -62,17 +63,17 @@ const isUnauthorizedError = (error: unknown): boolean => {
 };
 
 const getStoredToken = (): string | null => {
-  const directToken = localStorage.getItem('auth_token');
+  const directToken = authStorage.getToken();
   if (directToken) return directToken;
 
-  const rawUser = localStorage.getItem('current_user');
+  const rawUser = authStorage.getCurrentUserRaw();
   if (!rawUser) return null;
 
   try {
     const parsed = JSON.parse(rawUser);
     const tokenFromUser = parsed.token;
     if (typeof tokenFromUser === 'string' && tokenFromUser.trim()) {
-      localStorage.setItem('auth_token', tokenFromUser);
+      authStorage.setToken(tokenFromUser);
       return tokenFromUser;
     }
   } catch (error) {
@@ -157,14 +158,33 @@ const apiFileRequest = async (endpoint: string, data: FormData) => {
 const toId = (value: any): string => {
   if (!value) return '';
   if (typeof value === 'string') return value;
-  if (typeof value === 'object') return value._id?.toString?.() || value.id?.toString?.() || '';
+  if (typeof value === 'object') {
+    const fromFields = value._id?.toString?.() || value.id?.toString?.();
+    if (fromFields) return fromFields;
+
+    const fromToString = value.toString?.();
+    if (typeof fromToString === 'string' && fromToString !== '[object Object]') {
+      return fromToString;
+    }
+    return '';
+  }
   return String(value);
 };
 
-const toUserRole = (role: string): UserRole => {
-  if (role && Object.values(UserRole).includes(role as UserRole)) {
-    return role as UserRole;
+const toUserRole = (role: unknown): UserRole => {
+  const raw = String(role || '').trim();
+  if (!raw) return UserRole.CANTEEN_MANAGER;
+
+  const normalized = raw.toUpperCase().replace(/[\s-]+/g, '_');
+  if (Object.values(UserRole).includes(normalized as UserRole)) {
+    return normalized as UserRole;
   }
+
+  if (normalized === 'SUPERADMIN' || normalized === 'ADMIN_SUPER') return UserRole.SUPER_ADMIN;
+  if (normalized === 'SCHOOLADMIN' || normalized === 'ADMIN_SCHOOL') return UserRole.SCHOOL_ADMIN;
+  if (normalized === 'CANTEENMANAGER' || normalized === 'MANAGER_CANTEEN') return UserRole.CANTEEN_MANAGER;
+  if (normalized === 'PARENTS') return UserRole.PARENT;
+
   return UserRole.CANTEEN_MANAGER;
 };
 
@@ -209,6 +229,8 @@ const mapSchool = (apiSchool: any): School => {
   const adminName = admin
     ? `${admin.first_name || ''} ${admin.last_name || ''}`.trim()
     : apiSchool.adminName || apiSchool.admin_name || '';
+  const adminEmail = admin?.email || apiSchool.admin_email || apiSchool.adminEmail;
+  const adminPhone = admin?.phone || apiSchool.admin_phone || apiSchool.adminPhone;
 
   return {
     id: toId(apiSchool),
@@ -220,12 +242,21 @@ const mapSchool = (apiSchool: any): School => {
     studentCount: apiSchool.studentCount || apiSchool.student_count || 0,
     status: apiSchool.status || 'active',
     lastPaymentDate: apiSchool.lastPaymentDate,
+    phone: apiSchool.phone || apiSchool.contact_phone || adminPhone || undefined,
+    email: apiSchool.email || apiSchool.contact_email || adminEmail || undefined,
+    createdAt: apiSchool.created_at ? new Date(apiSchool.created_at).toISOString() : (apiSchool.createdAt || undefined),
   };
 };
 
 const mapStudent = (apiStudent: any): Student => {
-  const parent = apiStudent.parent_id;
+  const parent = apiStudent.parent_id || apiStudent.parent;
   const parentId = parent ? toId(parent) : apiStudent.parent_id ? toId(apiStudent.parent_id) : undefined;
+  const parentName = (
+    `${parent?.first_name || parent?.firstName || ''} ${parent?.last_name || parent?.lastName || ''}`.trim()
+    || apiStudent.parent_name
+    || apiStudent.parentName
+    || ''
+  );
   const parentPhone = (
     parent?.phone
     || apiStudent.parentPhone
@@ -251,6 +282,7 @@ const mapStudent = (apiStudent: any): Student => {
           : 'none';
   const schoolId = apiStudent.school_id ? toId(apiStudent.school_id) : '';
   const id = toId(apiStudent);
+  const allergies = Array.isArray(apiStudent.allergies) ? apiStudent.allergies.filter(Boolean) : [];
 
   return {
     id,
@@ -261,19 +293,23 @@ const mapStudent = (apiStudent: any): Student => {
     birthDate: apiStudent.birth_date
       ? new Date(apiStudent.birth_date).toISOString().slice(0, 10)
       : apiStudent.birthDate,
+    parentName: parentName || undefined,
     parentPhone,
     parentId,
     schoolId,
     subscriptionStatus,
+    allergies,
+    subscriptionEndDate: apiStudent.end_date || apiStudent.endDate || undefined,
+    subscriptionPlan: apiStudent.plan_type || apiStudent.planType || apiStudent.subscription_type || undefined,
     qrCode: apiStudent.qrCode || `QR_${id}`,
   };
 };
 
 const mapPayment = (apiPayment: any): Payment => {
   const rawStatus = String(apiPayment.status || '').toUpperCase();
-  const status: Payment['status'] = rawStatus === 'SUCCESS' || rawStatus === 'COMPLETED'
+  const status: Payment['status'] = rawStatus === 'SUCCESS' || rawStatus === 'COMPLETED' || rawStatus === 'VALIDATED' || rawStatus === 'APPROVED'
     ? 'completed'
-    : rawStatus === 'FAILED' || rawStatus === 'REFUNDED'
+    : rawStatus === 'FAILED' || rawStatus === 'REFUNDED' || rawStatus === 'REJECTED' || rawStatus === 'DECLINED'
       ? 'failed'
       : 'pending';
   const child = apiPayment.child_id || apiPayment.child || null;
@@ -318,11 +354,19 @@ const mapPayment = (apiPayment: any): Payment => {
     || subscriptionStudent?.schoolId
     || child?.school_id
   );
+  const resolvedSubscriptionId = toId(
+    apiPayment.subscriptionId
+    || apiPayment.subscription_id
+    || apiPayment.subscription?._id
+    || apiPayment.subscription?.id
+    || subscription
+  );
 
   return {
     id: toId(apiPayment),
     studentId: resolvedStudentId,
     studentName: resolvedStudentName,
+    subscriptionId: resolvedSubscriptionId || undefined,
     schoolId: resolvedSchoolId,
     amount: apiPayment.amount || 0,
     date: normalizedDate,
@@ -427,13 +471,13 @@ export const authApi = {
       if (!authToken) {
         return { success: false, message: 'Token de session absent dans la reponse login.' };
       }
-      localStorage.setItem('auth_token', authToken);
+      authStorage.setToken(authToken);
 
       const user = result.data ? mapUser(result.data) : undefined;
       const enrichedUser = user ? await enrichUserWithSchool(user) : undefined;
 
       if (enrichedUser) {
-        localStorage.setItem('current_user', JSON.stringify({ ...enrichedUser, token: authToken }));
+        authStorage.setCurrentUserRaw(JSON.stringify({ ...enrichedUser, token: authToken }));
       }
 
       return { success: !!result.success, data: enrichedUser };
@@ -451,14 +495,14 @@ export const authApi = {
 
       const authToken = result.token || result.data.token;
       if (authToken) {
-        localStorage.setItem('auth_token', authToken);
+        authStorage.setToken(authToken);
       }
 
       const user = result.data ? mapUser(result.data) : undefined;
       const enrichedUser = user ? await enrichUserWithSchool(user) : undefined;
 
       if (enrichedUser) {
-        localStorage.setItem('current_user', JSON.stringify(authToken ? { ...enrichedUser, token: authToken } : enrichedUser));
+        authStorage.setCurrentUserRaw(JSON.stringify(authToken ? { ...enrichedUser, token: authToken } : enrichedUser));
       }
 
       return { success: !!result.success, data: enrichedUser, token: authToken };
@@ -497,7 +541,7 @@ export const authApi = {
       if (schoolPayload) {
         const mappedSchool = mapSchool(schoolPayload);
         const enrichedUser = { ...registerResult.data, schoolId: mappedSchool.id, schoolName: mappedSchool.name };
-        localStorage.setItem('current_user', JSON.stringify(enrichedUser));
+        authStorage.setCurrentUserRaw(JSON.stringify(enrichedUser));
         return { success: true, data: enrichedUser };
       }
 
@@ -515,7 +559,7 @@ export const authApi = {
       const user = mapUser(result.data);
       const enrichedUser = await enrichUserWithSchool(user);
       const currentToken = getStoredToken();
-      localStorage.setItem('current_user', JSON.stringify(currentToken ? { ...enrichedUser, token: currentToken } : enrichedUser));
+      authStorage.setCurrentUserRaw(JSON.stringify(currentToken ? { ...enrichedUser, token: currentToken } : enrichedUser));
       return enrichedUser;
     } catch (error: any) {
       const message = error.message || '';
@@ -548,17 +592,14 @@ export const authApi = {
 
       const authToken = result.token || result.data?.token || getStoredToken();
       if (authToken) {
-        localStorage.setItem('auth_token', authToken);
+        authStorage.setToken(authToken);
       }
 
       const user = result.data ? mapUser(result.data) : undefined;
       const enrichedUser = user ? await enrichUserWithSchool(user) : undefined;
 
       if (enrichedUser) {
-        localStorage.setItem(
-          'current_user',
-          JSON.stringify(authToken ? { ...enrichedUser, token: authToken } : enrichedUser)
-        );
+        authStorage.setCurrentUserRaw(JSON.stringify(authToken ? { ...enrichedUser, token: authToken } : enrichedUser));
       }
 
       return {
@@ -659,7 +700,17 @@ export const studentsApi = {
     }
   },
 
-  createStudent: async (studentData: { firstName: string; lastName: string; class: string; schoolId: string; parentId?: string; parentPhone?: string; birthDate?: string }): Promise<Student | null> => {
+  createStudent: async (studentData: {
+    firstName: string;
+    lastName: string;
+    class: string;
+    schoolId: string;
+    parentId?: string;
+    parentPhone?: string;
+    birthDate?: string;
+    studentCode?: string;
+    allergies?: string[];
+  }): Promise<Student | null> => {
     try {
       const result: ApiResult<any> = await apiRequest('/students', {
         method: 'POST',
@@ -670,6 +721,8 @@ export const studentsApi = {
           school_id: studentData.schoolId,
           parent_id: studentData.parentId,
           birth_date: studentData.birthDate,
+          student_code: studentData.studentCode,
+          allergies: studentData.allergies,
         }),
       });
       return result.data ? mapStudent(result.data) : null;
@@ -971,6 +1024,55 @@ export const usersApi = {
   }
 };
 
+export type SchoolTariffsPayload = {
+  schoolId: string;
+  rates: {
+    monthly: number;
+    quarterly: number;
+    yearly: number;
+  };
+  history: Array<{
+    id: string;
+    date: string;
+    message: string;
+    by: string;
+    planType: 'MONTHLY' | 'QUARTERLY' | 'YEARLY' | string;
+    oldAmount: number;
+    newAmount: number;
+  }>;
+  updatedAt?: string | null;
+};
+
+export const tariffsApi = {
+  getSchoolTariffs: async (schoolId: string): Promise<SchoolTariffsPayload | null> => {
+    if (!schoolId) return null;
+    try {
+      const result: ApiResult<any> = await apiRequest(`/schools/${schoolId}/tariffs`);
+      return result.data || null;
+    } catch (error) {
+      console.error('Get school tariffs error:', error);
+      return null;
+    }
+  },
+
+  updateSchoolTariffs: async (
+    schoolId: string,
+    rates: Partial<{ monthly: number; quarterly: number; yearly: number }>
+  ): Promise<SchoolTariffsPayload | null> => {
+    if (!schoolId) return null;
+    try {
+      const result: ApiResult<any> = await apiRequest(`/schools/${schoolId}/tariffs`, {
+        method: 'PUT',
+        body: JSON.stringify({ rates }),
+      });
+      return result.data || null;
+    } catch (error) {
+      console.error('Update school tariffs error:', error);
+      throw error;
+    }
+  },
+};
+
 export const subscriptionsApi = {
   getSubscriptions: async (schoolId: string): Promise<any[]> => {
     try {
@@ -1124,9 +1226,11 @@ export default {
   menuApi,
   paymentsApi,
   usersApi,
+  tariffsApi,
   subscriptionsApi,
   attendanceApi,
   reportsApi,
   notificationsApi,
 };
+
 

@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Settings as SettingsIcon, Save, ShieldCheck, User as UserIcon, Mail, RefreshCw, CheckCircle2, Trash2, Eye, EyeOff } from 'lucide-react';
 import { User, UserRole } from '../types';
 import { authApi } from '../services/api';
+import { authStorage } from '../utils/authStorage';
 
 const getInitials = (name: string) => {
   return name
@@ -50,13 +51,13 @@ const Settings: React.FC<SettingsProps> = ({ currentUser, onUserUpdate }) => {
     // Simulation de mise à jour (à remplacer par un vrai appel API)
     onUserUpdate(updatedUser);
     
-    const storedUser = localStorage.getItem('current_user');
+    const storedUser = authStorage.getCurrentUserRaw();
     if (storedUser) {
       try {
         const parsedStoredUser = JSON.parse(storedUser);
-        localStorage.setItem('current_user', JSON.stringify({ ...parsedStoredUser, ...updatedUser }));
+        authStorage.setCurrentUserRaw(JSON.stringify({ ...parsedStoredUser, ...updatedUser }));
       } catch {
-        localStorage.setItem('current_user', JSON.stringify(updatedUser));
+        authStorage.setCurrentUserRaw(JSON.stringify(updatedUser));
       }
     }
 

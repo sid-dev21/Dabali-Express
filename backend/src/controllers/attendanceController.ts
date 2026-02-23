@@ -75,15 +75,21 @@ export const markAttendance = async (req: Request, res: Response): Promise<void>
       return;
     }
 
+    const dayStart = new Date();
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(dayStart);
+    dayEnd.setHours(23, 59, 59, 999);
+
     const existingAttendance = await Attendance.findOne({
       student_id,
-      menu_id
+      menu_id,
+      date: { $gte: dayStart, $lte: dayEnd }
     });
 
     if (existingAttendance) {
       res.status(400).json({
         success: false,
-        message: 'Attendance already marked for this student and menu.'
+        message: 'Attendance already marked for this student and menu today.'
       } as ApiResponse);
       return;
     }
@@ -127,7 +133,7 @@ export const markAttendance = async (req: Request, res: Response): Promise<void>
       };
 
       const latestSubscription = await Subscription.findOne(subscriptionQuery)
-        .sort({ end_date: -1, updatedAt: -1, createdAt: -1 })
+        .sort({ end_date: -1, updated_at: -1, updatedAt: -1, created_at: -1, createdAt: -1 })
         .select('_id');
 
       if (latestSubscription?._id) {
@@ -135,7 +141,7 @@ export const markAttendance = async (req: Request, res: Response): Promise<void>
           subscription_id: latestSubscription._id,
           parent_id: { $exists: true, $ne: null },
         })
-          .sort({ paid_at: -1, createdAt: -1 })
+          .sort({ paid_at: -1, created_at: -1, createdAt: -1 })
           .select('parent_id');
 
         if (latestPayment?.parent_id) {

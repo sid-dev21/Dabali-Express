@@ -64,6 +64,18 @@ const schoolSchema = new mongoose.Schema({
   admin_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   student_count: { type: Number, default: 0 },
   status: { type: String, enum: ['active', 'inactive'], default: 'active' },
+  subscription_tariffs: {
+    monthly: { type: Number, default: 15000, min: 0 },
+    quarterly: { type: Number, default: 40000, min: 0 },
+    yearly: { type: Number, default: 150000, min: 0 },
+  },
+  tariff_history: [{
+    plan_type: { type: String, enum: ['MONTHLY', 'QUARTERLY', 'YEARLY'], required: true },
+    previous_amount: { type: Number, required: true },
+    next_amount: { type: Number, required: true },
+    updated_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    updated_at: { type: Date, default: Date.now },
+  }],
   created_at: { type: Date, default: Date.now }
 });
 
@@ -612,6 +624,131 @@ const mapChildResponse = (child) => {
   };
 };
 
+const DEFAULT_SUBSCRIPTION_TARIFFS = Object.freeze({
+  monthly: 15000,
+  quarterly: 40000,
+  yearly: 150000,
+});
+
+const SUPPORTED_SUBSCRIPTION_TYPES = ['MONTHLY', 'QUARTERLY', 'YEARLY'];
+
+const normalizeTariffAmount = (value, fallback) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return Math.round(parsed);
+};
+
+const normalizeTariffRates = (value, fallback = DEFAULT_SUBSCRIPTION_TARIFFS) => {
+  const source = value && typeof value === 'object' ? value : {};
+  return {
+    monthly: normalizeTariffAmount(source.monthly ?? source.MONTHLY, fallback.monthly),
+    quarterly: normalizeTariffAmount(source.quarterly ?? source.QUARTERLY, fallback.quarterly),
+    yearly: normalizeTariffAmount(source.yearly ?? source.YEARLY, fallback.yearly),
+  };
+};
+
+const parseTariffUpdates = (payload) => {
+  const source = payload?.rates && typeof payload.rates === 'object'
+    ? payload.rates
+    : (payload && typeof payload === 'object' ? payload : {});
+  const aliases = {
+    monthly: ['monthly', 'MONTHLY'],
+    quarterly: ['quarterly', 'QUARTERLY'],
+    yearly: ['yearly', 'YEARLY'],
+  };
+  const updates = {};
+
+  for (const [key, candidates] of Object.entries(aliases)) {
+    const hasValue = candidates.some((candidate) => source[candidate] !== undefined);
+    if (!hasValue) continue;
+    const raw = source[candidates.find((candidate) => source[candidate] !== undefined)];
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return { error: `Tarif invalide pour ${key}.` };
+    }
+    updates[key] = Math.round(parsed);
+  }
+
+  return { updates };
+};
+
+const formatFcfaAmount = (value) => `${Math.round(Number(value) || 0).toLocaleString('fr-FR')} FCFA`;
+
+const getTariffKeyFromSubscriptionType = (type) => {
+  if (type === 'MONTHLY') return 'monthly';
+  if (type === 'QUARTERLY') return 'quarterly';
+  if (type === 'YEARLY') return 'yearly';
+  return null;
+};
+
+const getTariffLabelFromKey = (key) => {
+  if (key === 'monthly') return 'Mensuel';
+  if (key === 'quarterly') return 'Trimestriel';
+  return 'Annuel';
+};
+
+const getTariffLabelFromPlanType = (planType) => {
+  if (planType === 'MONTHLY') return 'Mensuel';
+  if (planType === 'QUARTERLY') return 'Trimestriel';
+  return 'Annuel';
+};
+
+const mapTariffHistoryResponse = (entry) => {
+  const item = entry?.toObject ? entry.toObject() : entry;
+  const byObj = item?.updated_by && typeof item.updated_by === 'object'
+    ? item.updated_by
+    : null;
+  const byName = `${byObj?.first_name || ''} ${byObj?.last_name || ''}`.trim() || 'School Admin';
+  const planType = String(item?.plan_type || 'MONTHLY').toUpperCase();
+  const previousAmount = Number(item?.previous_amount) || 0;
+  const nextAmount = Number(item?.next_amount) || 0;
+  const date = item?.updated_at ? new Date(item.updated_at).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
+
+  return {
+    id: item?._id?.toString?.() || `${planType}-${date}-${nextAmount}`,
+    planType,
+    date,
+    oldAmount: previousAmount,
+    newAmount: nextAmount,
+    message: `${getTariffLabelFromPlanType(planType)} : ${formatFcfaAmount(previousAmount)} -> ${formatFcfaAmount(nextAmount)}`,
+    by: byName,
+  };
+};
+
+const mapSchoolTariffsResponse = (school) => {
+  const obj = school?.toObject ? school.toObject() : school;
+  const rates = normalizeTariffRates(obj?.subscription_tariffs);
+  const history = Array.isArray(obj?.tariff_history)
+    ? obj.tariff_history
+      .slice()
+      .sort((a, b) => new Date(b?.updated_at || 0).getTime() - new Date(a?.updated_at || 0).getTime())
+      .map(mapTariffHistoryResponse)
+    : [];
+
+  return {
+    schoolId: obj?._id?.toString?.() || null,
+    rates,
+    history,
+    updatedAt: history[0]?.date || null,
+  };
+};
+
+const ensureSchoolAccess = async (req, res, schoolId) => {
+  if (!req.user) {
+    res.status(401).json({ success: false, message: 'Non authentifie.' });
+    return false;
+  }
+
+  const accessibleSchoolIds = await resolveAccessibleSchoolIds(req.user);
+  if (accessibleSchoolIds === null) return true;
+  const allowed = accessibleSchoolIds.includes(String(schoolId));
+  if (!allowed) {
+    res.status(403).json({ success: false, message: 'Acces refuse a cette ecole.' });
+    return false;
+  }
+  return true;
+};
+
 const normalizeSubscriptionType = (value) => {
   if (!value) return null;
   const normalized = String(value).trim().toUpperCase();
@@ -1072,7 +1209,7 @@ app.get('/api/schools/public', async (req, res) => {
 
 app.get('/api/schools', async (req, res) => {
   try {
-    const schools = await School.find();
+    const schools = await School.find().populate('admin_id', 'first_name last_name email phone');
     res.json({
       success: true,
       data: schools
@@ -1083,7 +1220,97 @@ app.get('/api/schools', async (req, res) => {
   }
 });
 
-// Route pour créer une école
+// Tarifs d'abonnement par ecole
+
+app.get('/api/schools/:id/tariffs', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: 'School ID invalide.' });
+    }
+
+    const hasAccess = await ensureSchoolAccess(req, res, id);
+    if (!hasAccess) return;
+
+    const school = await School.findById(id)
+      .populate('tariff_history.updated_by', 'first_name last_name');
+    if (!school) {
+      return res.status(404).json({ success: false, message: 'Ecole non trouvee.' });
+    }
+
+    return res.json({
+      success: true,
+      data: mapSchoolTariffsResponse(school),
+    });
+  } catch (error) {
+    console.error('Get school tariffs error:', error);
+    return res.status(500).json({ success: false, message: 'Erreur serveur' });
+  }
+});
+
+app.put('/api/schools/:id/tariffs', requireAuth, requireRole('SCHOOL_ADMIN', 'SUPER_ADMIN'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: 'School ID invalide.' });
+    }
+
+    const hasAccess = await ensureSchoolAccess(req, res, id);
+    if (!hasAccess) return;
+
+    const school = await School.findById(id);
+    if (!school) {
+      return res.status(404).json({ success: false, message: 'Ecole non trouvee.' });
+    }
+
+    const { updates, error } = parseTariffUpdates(req.body || {});
+    if (error) {
+      return res.status(400).json({ success: false, message: error });
+    }
+    if (!updates || Object.keys(updates).length === 0) {
+      return res.status(400).json({ success: false, message: 'Aucun tarif valide fourni.' });
+    }
+
+    const currentRates = normalizeTariffRates(school.subscription_tariffs);
+    const nextRates = { ...currentRates, ...updates };
+    const changedKeys = Object.keys(nextRates).filter((key) => currentRates[key] !== nextRates[key]);
+
+    if (changedKeys.length === 0) {
+      const unchangedSchool = await School.findById(id).populate('tariff_history.updated_by', 'first_name last_name');
+      return res.json({
+        success: true,
+        message: 'Aucun changement detecte.',
+        data: mapSchoolTariffsResponse(unchangedSchool || school),
+      });
+    }
+
+    const historyEntries = changedKeys.map((key) => ({
+      plan_type: key.toUpperCase(),
+      previous_amount: currentRates[key],
+      next_amount: nextRates[key],
+      updated_by: req.user.id,
+      updated_at: new Date(),
+    }));
+
+    const existingHistory = Array.isArray(school.tariff_history) ? school.tariff_history : [];
+    school.subscription_tariffs = nextRates;
+    school.tariff_history = [...historyEntries, ...existingHistory].slice(0, 100);
+    await school.save();
+
+    const updatedSchool = await School.findById(id).populate('tariff_history.updated_by', 'first_name last_name');
+
+    return res.json({
+      success: true,
+      message: 'Tarifs mis a jour (' + changedKeys.map(getTariffLabelFromKey).join(', ') + ').',
+      data: mapSchoolTariffsResponse(updatedSchool || school),
+    });
+  } catch (error) {
+    console.error('Update school tariffs error:', error);
+    return res.status(500).json({ success: false, message: 'Erreur serveur' });
+  }
+});
+
+// Route pour creer une ecole
 app.post('/api/schools', async (req, res) => {
   try {
     const {
@@ -1167,7 +1394,8 @@ app.post('/api/schools', async (req, res) => {
       address,
       city,
       admin_name: resolvedAdminName,
-      admin_id: admin ? admin._id : undefined
+      admin_id: admin ? admin._id : undefined,
+      subscription_tariffs: { ...DEFAULT_SUBSCRIPTION_TARIFFS },
     });
 
     await school.save();
@@ -1331,7 +1559,7 @@ app.get('/api/students', requireAuth, async (req, res) => {
     const { school_id } = req.query;
     let schoolId = school_id;
 
-    if (!schoolId && req.user?.role === 'SCHOOL_ADMIN') {
+    if (!schoolId && (req.user?.role === 'SCHOOL_ADMIN' || req.user?.role === 'CANTEEN_MANAGER')) {
       schoolId = await resolveSchoolIdForUser(req.user.id);
     }
 
@@ -1339,11 +1567,101 @@ app.get('/api/students', requireAuth, async (req, res) => {
       return res.status(400).json({ success: false, message: 'School ID invalide.' });
     }
 
-    const filter = schoolId ? { school_id: schoolId } : {};
-    const students = await StudentRegistry.find(filter).sort({ last_name: 1, first_name: 1 });
-    res.json({ success: true, data: students });
+    const filter = {};
+    if (schoolId) {
+      filter.school_id = schoolId;
+    }
+    if (req.user?.role === 'PARENT') {
+      filter.parent_id = req.user.id;
+    }
+
+    const students = await Child.find(filter)
+      .populate('parent_id', 'first_name last_name phone email')
+      .sort({ last_name: 1, first_name: 1 });
+
+    const linkedRows = students.map((student) => {
+      const mapped = mapChildResponse(student);
+      const parent = mapped?.parent_id && typeof mapped.parent_id === 'object' ? mapped.parent_id : null;
+      const parentName = parent
+        ? `${parent.first_name || ''} ${parent.last_name || ''}`.trim()
+        : '';
+
+      return {
+        ...mapped,
+        parent_name: parentName || undefined,
+        parent_phone: parent?.phone || parent?.email || undefined,
+        source: 'child',
+      };
+    });
+
+    // Pour SCHOOL_ADMIN / CANTEEN_MANAGER / SUPER_ADMIN :
+    // inclure aussi les eleves importes (StudentRegistry) qui ne sont pas encore lies a un parent.
+    // Cela permet d'afficher "tous les eleves" et de conserver les vraies valeurs
+    // parent/abonnement quand elles existent deja sur Child.
+    let data = linkedRows;
+    if (req.user?.role !== 'PARENT') {
+      const registryFilter = schoolId ? { school_id: schoolId } : {};
+      const registryRows = await StudentRegistry.find(registryFilter)
+        .sort({ last_name: 1, first_name: 1 })
+        .lean();
+
+      const linkedKeys = new Set();
+      linkedRows.forEach((row) => {
+        const codeKey = normalizeCode(row.student_code);
+        if (codeKey) {
+          linkedKeys.add(`code:${codeKey}`);
+        }
+
+        const identityKey = [
+          normalizeName(row.first_name),
+          normalizeName(row.last_name),
+          normalizeDate(row.birth_date),
+          normalizeClass(row.class_name || row.grade)
+        ].join('|');
+        if (identityKey.replace(/\|/g, '')) {
+          linkedKeys.add(`id:${identityKey}`);
+        }
+      });
+
+      const unmatchedRegistryRows = registryRows
+        .filter((row) => {
+          const codeKey = row.norm_student_code || normalizeCode(row.student_code);
+          const identityKey = [
+            row.norm_first_name || normalizeName(row.first_name),
+            row.norm_last_name || normalizeName(row.last_name),
+            row.norm_birth_date || normalizeDate(row.birth_date),
+            row.norm_class_name || normalizeClass(row.class_name)
+          ].join('|');
+
+          if (codeKey && linkedKeys.has(`code:${codeKey}`)) return false;
+          if (identityKey.replace(/\|/g, '') && linkedKeys.has(`id:${identityKey}`)) return false;
+          return true;
+        })
+        .map((row) => ({
+          id: row._id?.toString?.() ? `registry-${row._id.toString()}` : `registry-${Date.now()}-${Math.random()}`,
+          _id: row._id,
+          first_name: row.first_name,
+          last_name: row.last_name,
+          student_code: row.student_code,
+          birth_date: row.birth_date,
+          class_name: row.class_name,
+          school_id: row.school_id,
+          parent_id: null,
+          parent_name: undefined,
+          parent_phone: undefined,
+          source: 'registry'
+        }));
+
+      data = [...linkedRows, ...unmatchedRegistryRows].sort((a, b) => {
+        const lastA = String(a.last_name || '').localeCompare(String(b.last_name || ''), 'fr');
+        if (lastA !== 0) return lastA;
+        return String(a.first_name || '').localeCompare(String(b.first_name || ''), 'fr');
+      });
+    }
+
+    res.json({ success: true, data });
   } catch (error) {
-    console.error('Get students registry error:', error);
+    console.error('Get students error:', error);
     res.status(500).json({ success: false, message: 'Erreur serveur' });
   }
 });
@@ -1770,16 +2088,29 @@ app.post('/api/subscriptions', requireAuth, requireRole('PARENT'), async (req, r
     if (!resolvedType) {
       return res.status(400).json({ success: false, message: 'Type d\'abonnement invalide.' });
     }
+    if (!SUPPORTED_SUBSCRIPTION_TYPES.includes(resolvedType)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Type d abonnement non supporte. Utilisez mensuel, trimestriel ou annuel.',
+      });
+    }
 
     const startDate = start_date ? new Date(start_date) : new Date();
     const endDate = end_date ? new Date(end_date) : calculateSubscriptionEndDate(startDate, resolvedType);
+    const school = await School.findById(child.school_id).select('subscription_tariffs');
+    const schoolRates = normalizeTariffRates(school?.subscription_tariffs);
+    const tariffKey = getTariffKeyFromSubscriptionType(resolvedType);
+    const configuredAmount = tariffKey ? schoolRates[tariffKey] : 0;
+    const requestedAmount = Number(amount);
+    const fallbackAmount = (Number.isFinite(requestedAmount) && requestedAmount > 0) ? Math.round(requestedAmount) : 0;
+    const finalAmount = configuredAmount > 0 ? configuredAmount : fallbackAmount;
 
     const subscription = new Subscription({
       child_id,
       plan_type: resolvedType,
       start_date: startDate,
       end_date: endDate,
-      amount: amount ?? 0,
+      amount: finalAmount,
       status: 'PENDING_PAYMENT'
     });
 
@@ -2887,9 +3218,18 @@ app.post('/api/attendance/mark', requireAuth, requireRole('CANTEEN_MANAGER'), as
       return res.status(403).json({ success: false, message: 'Accès non autorisé à cette école.' });
     }
 
-    const existing = await Attendance.findOne({ student_id, menu_id });
+    const dayStart = new Date();
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(dayStart);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    const existing = await Attendance.findOne({
+      student_id,
+      menu_id,
+      date: { $gte: dayStart, $lte: dayEnd }
+    });
     if (existing) {
-      return res.status(400).json({ success: false, message: 'Présence déjà enregistrée pour cet élève.' });
+      return res.status(400).json({ success: false, message: 'Présence déjà enregistrée aujourd\'hui pour cet élève et ce menu.' });
     }
 
     const attendance = new Attendance({
@@ -2904,13 +3244,34 @@ app.post('/api/attendance/mark', requireAuth, requireRole('CANTEEN_MANAGER'), as
 
     await attendance.save();
 
-    if (!attendance.present && student.parent_id) {
+    let parentUserId = student.parent_id?.toString?.() || '';
+    if (!parentUserId) {
+      const latestSubscription = await Subscription.findOne({ child_id: student._id })
+        .sort({ end_date: -1, updated_at: -1, created_at: -1 })
+        .select('_id');
+
+      if (latestSubscription?._id) {
+        const latestPayment = await Payment.findOne({
+          subscription_id: latestSubscription._id,
+          parent_id: { $exists: true, $ne: null }
+        })
+          .sort({ paid_at: -1, created_at: -1 })
+          .select('parent_id');
+
+        if (latestPayment?.parent_id) {
+          parentUserId = latestPayment.parent_id.toString();
+        }
+      }
+    }
+
+    let notificationSent = false;
+    if (!attendance.present && parentUserId) {
       const safeReason = typeof reason === 'string' ? reason.trim() : '';
       const reasonSuffix = safeReason ? ` Motif: ${safeReason}` : '';
 
       try {
         await Notification.create({
-          user_id: student.parent_id,
+          user_id: parentUserId,
           school_id: student.school_id || null,
           title: 'Absence a la cantine',
           message: `${student.first_name} ${student.last_name} a ete signale absent (${menu.meal_type || 'REPAS'}) aujourd'hui.${reasonSuffix}`,
@@ -2922,6 +3283,7 @@ app.post('/api/attendance/mark', requireAuth, requireRole('CANTEEN_MANAGER'), as
             reason: safeReason || null,
           },
         });
+        notificationSent = true;
       } catch (notificationError) {
         console.error('Absence notification error:', notificationError);
       }
@@ -2930,7 +3292,10 @@ app.post('/api/attendance/mark', requireAuth, requireRole('CANTEEN_MANAGER'), as
     res.status(201).json({
       success: true,
       message: 'Présence enregistrée.',
-      data: attendance,
+      data: {
+        ...attendance.toObject(),
+        notification_sent: notificationSent,
+      },
     });
   } catch (error) {
     console.error('Mark attendance error:', error);
@@ -3683,6 +4048,9 @@ const startServer = async () => {
 };
 
 startServer();
+
+
+
 
 
 

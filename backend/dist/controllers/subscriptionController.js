@@ -8,6 +8,23 @@ const Subscription_1 = __importDefault(require("../models/Subscription"));
 const Student_1 = __importDefault(require("../models/Student"));
 const Payment_1 = __importDefault(require("../models/Payment"));
 const types_1 = require("../types");
+const toEntityId = (value) => {
+    if (!value)
+        return '';
+    if (typeof value === 'string')
+        return value;
+    if (typeof value === 'object') {
+        const fromFields = value._id || value.id;
+        if (fromFields)
+            return String(fromFields);
+        const fromToString = value.toString?.();
+        if (typeof fromToString === 'string' && fromToString !== '[object Object]') {
+            return fromToString;
+        }
+        return '';
+    }
+    return String(value);
+};
 // Allows to get all subscriptions with optional filters (student, status) and populated student info
 const getAllSubscriptions = async (req, res) => {
     try {
@@ -44,18 +61,12 @@ const getAllSubscriptions = async (req, res) => {
             .map((subscription) => {
             const populatedStudent = subscription?.student_id;
             if (populatedStudent && typeof populatedStudent === 'object') {
-                const populatedId = populatedStudent._id || populatedStudent.id;
+                const populatedId = toEntityId(populatedStudent);
                 if (populatedId)
                     return populatedId.toString();
             }
             const legacyId = subscription?.child_id || subscription?.student_id;
-            if (!legacyId)
-                return '';
-            if (typeof legacyId === 'string')
-                return legacyId;
-            if (typeof legacyId === 'object')
-                return (legacyId._id || legacyId.id || '').toString();
-            return String(legacyId);
+            return toEntityId(legacyId);
         })
             .filter(Boolean);
         const children = childIds.length > 0
@@ -70,15 +81,14 @@ const getAllSubscriptions = async (req, res) => {
                 ? subscription.student_id
                 : null;
             const fallbackIdRaw = subscription?.child_id || subscription?.student_id || '';
-            const fallbackId = typeof fallbackIdRaw === 'object'
-                ? (fallbackIdRaw._id || fallbackIdRaw.id || '').toString()
-                : String(fallbackIdRaw || '');
-            const childId = (populatedStudent?._id || populatedStudent?.id || fallbackId || '').toString();
+            const fallbackId = toEntityId(fallbackIdRaw);
+            const childId = toEntityId(populatedStudent) || fallbackId || '';
             const child = populatedStudent || childById.get(childId) || null;
             return {
                 ...subscription,
                 child,
                 childId,
+                studentId: childId,
                 startDate: subscription.startDate || subscription.start_date || '',
                 endDate: subscription.endDate || subscription.end_date || '',
             };

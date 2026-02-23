@@ -31,6 +31,9 @@ export interface School {
   studentCount: number;
   status: 'active' | 'inactive';
   lastPaymentDate?: string;
+  phone?: string;
+  email?: string;
+  createdAt?: string;
 }
 
 export interface Student {
@@ -40,10 +43,14 @@ export interface Student {
   class: string;
   studentCode?: string;
   birthDate?: string;
+  parentName?: string;
   parentPhone: string;
   parentId?: string;
   schoolId: string;
   subscriptionStatus: 'active' | 'warning' | 'expired' | 'none';
+  allergies?: string[];
+  subscriptionEndDate?: string;
+  subscriptionPlan?: string;
   qrCode: string;
 }
 
@@ -72,6 +79,7 @@ export interface Payment {
   id: string;
   studentId: string;
   studentName: string;
+  subscriptionId?: string;
   schoolId: string;
   amount: number;
   date: string;
@@ -92,4 +100,5 @@ export interface LoginResponse<T = JSON> {
   message?: string;
   data?: T;
 }
+
 

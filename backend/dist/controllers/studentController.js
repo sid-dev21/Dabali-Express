@@ -13,21 +13,46 @@ const normalizeString = (value) => {
         return '';
     return value.trim();
 };
+const isValidDateParts = (year, month, day) => {
+    if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day))
+        return false;
+    if (year < 1900 || year > 2100)
+        return false;
+    if (month < 1 || month > 12)
+        return false;
+    if (day < 1)
+        return false;
+    const maxDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    return day <= maxDay;
+};
+const toUtcDate = (year, month, day) => new Date(Date.UTC(year, month - 1, day));
 const parseDateOnly = (value) => {
     if (typeof value !== 'string' || value.trim().length === 0)
         return null;
-    const datePart = value.split('T')[0];
-    const parts = datePart.split('-');
-    if (parts.length === 3) {
-        const [year, month, day] = parts.map(Number);
-        if (!year || !month || !day)
+    const raw = value.trim();
+    const datePart = raw.split('T')[0].split(' ')[0];
+    const yyyyMmDd = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/.exec(datePart);
+    if (yyyyMmDd) {
+        const year = Number(yyyyMmDd[1]);
+        const month = Number(yyyyMmDd[2]);
+        const day = Number(yyyyMmDd[3]);
+        if (!isValidDateParts(year, month, day))
             return null;
-        return new Date(Date.UTC(year, month - 1, day));
+        return toUtcDate(year, month, day);
     }
-    const parsed = new Date(value);
+    const ddMmYyyy = /^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/.exec(datePart);
+    if (ddMmYyyy) {
+        const day = Number(ddMmYyyy[1]);
+        const month = Number(ddMmYyyy[2]);
+        const year = Number(ddMmYyyy[3]);
+        if (!isValidDateParts(year, month, day))
+            return null;
+        return toUtcDate(year, month, day);
+    }
+    const parsed = new Date(raw);
     if (Number.isNaN(parsed.getTime()))
         return null;
-    return parsed;
+    return toUtcDate(parsed.getUTCFullYear(), parsed.getUTCMonth() + 1, parsed.getUTCDate());
 };
 const buildBirthDateFilter = (date) => ({
     $gte: date,

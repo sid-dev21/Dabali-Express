@@ -322,6 +322,11 @@ const Attendance: React.FC<AttendanceProps> = ({ schoolId, initialSearch = '' })
       return;
     }
 
+    if (usingFallbackMenu) {
+      alert("Le pointage est bloqué: aucun menu du jour exact n'est disponible. Créez/validez le menu d'aujourd'hui puis réessayez.");
+      return;
+    }
+
     if (paidStudents.length === 0) {
       alert('Aucun eleve abonne actif trouve pour cette ecole.');
       return;
@@ -430,9 +435,9 @@ const Attendance: React.FC<AttendanceProps> = ({ schoolId, initialSearch = '' })
 
           <button
             onClick={handleSaveRollCall}
-            disabled={!menuIdForToday || isSaving}
+            disabled={!menuIdForToday || usingFallbackMenu || isSaving}
             className={`inline-flex items-center justify-center gap-2 rounded-full px-5 py-2 text-[11px] font-black uppercase tracking-widest transition ${
-              menuIdForToday && !isSaving
+              menuIdForToday && !usingFallbackMenu && !isSaving
                 ? 'bg-slate-900 text-white hover:bg-slate-800'
                 : 'bg-slate-200 text-slate-400 cursor-not-allowed'
             }`}

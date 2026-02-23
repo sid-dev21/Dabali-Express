@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 
-import { Mail, Lock, User, School, MapPin, ArrowRight, CheckCircle2, AlertCircle, Loader2, ShieldCheck, Utensils, ChevronLeft, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock, User, School, MapPin, ArrowRight, CheckCircle2, AlertCircle, Loader2, ShieldCheck, Utensils, Eye, EyeOff } from 'lucide-react';
 
 import { authApi } from '../services/api';
 
@@ -22,7 +22,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
 
   const [isLogin, setIsLogin] = useState(true);
 
-  const [step, setStep] = useState<'ROLE' | 'FORM'>('ROLE');
+  const [step, setStep] = useState<'ROLE' | 'FORM'>('FORM');
 
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
 
@@ -133,7 +133,8 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
         if (result.success && result.data) {
           onLoginSuccess(result.data);
         } else {
-          setError(result.message || `Identifiants incorrects. Verifiez votre email et mot de passe pour le role ${roles.find(r => r.id === selectedRole)?.title}.`);
+          const selectedRoleTitle = roles.find((r) => r.id === selectedRole)?.title || 'selectionne';
+          setError(result.message || `Identifiants incorrects. Verifiez votre email et mot de passe pour le role ${selectedRoleTitle}.`);
         }
       } else {
         const confirmPass = formData.get('confirmPassword') as string;
@@ -300,32 +301,6 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
             
 
             <div className="mb-10 relative">
-              {isLogin && step === 'FORM' && (
-                <button 
-                  onClick={() => { setStep('ROLE'); setError(null); }}
-                  className="absolute -left-12 top-1 p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all"
-                >
-                  <ChevronLeft size={24} />
-                </button>
-              )}
-              
-              {!isLogin && (
-                <button 
-                  onClick={() => {
-                    setIsLogin(true);
-                    setStep('ROLE');
-                    setSelectedRole(null);
-                    setError(null);
-                    setPassword('');
-                    setConfirmPassword('');
-                    setEmailValue('');
-                  }}
-                  className="absolute -left-12 top-1 p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all"
-                  title="Retour à la connexion"
-                >
-                  <ChevronLeft size={24} />
-                </button>
-              )}
 
               <h2 className="text-3xl font-black text-slate-800">
 
@@ -337,7 +312,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
 
                 {isLogin 
 
-                  ? (step === 'ROLE' ? 'Choisissez votre profil de connexion.' : `Connectez-vous en tant que ${roles.find(r => r.id === selectedRole)?.title}`) 
+                  ? (step === 'ROLE' ? 'Choisissez votre profil de connexion.' : (selectedRole ? `Connectez-vous en tant que ${roles.find(r => r.id === selectedRole)?.title}` : 'Connectez-vous a votre compte.')) 
 
                   : 'Créez votre compte administrateur établissement.'}
 

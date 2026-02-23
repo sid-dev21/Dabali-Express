@@ -32,11 +32,51 @@ import CanteenReports from './components/CanteenReports';
 import SuperAdminReports from './components/SuperAdminReports';
 
 import CanteenHistory from './components/CanteenHistory';
+import Tariffs from './components/Tariffs';
 
 import Auth from './components/Auth';
 import Notifications from './components/Notifications';
+import { NAV_ITEMS } from './constants';
 
 import { Menu, Bell, BellOff, X } from 'lucide-react';
+
+const TAB_TO_PATH: Record<string, string> = {
+  dashboard: '/',
+  schools: '/schools',
+  users: '/users',
+  students: '/students',
+  menus: '/menus',
+  subscriptions: '/subscriptions',
+  payments: '/payments',
+  tariffs: '/tariffs',
+  settings: '/settings',
+  'canteen-managers': '/canteen-managers',
+  attendance: '/attendance',
+  stock: '/stock',
+  'canteen-reports': '/canteen-reports',
+  'canteen-history': '/canteen-history',
+  'school-admin-reports': '/school-admin-reports',
+};
+
+const normalizePath = (path: string): string => {
+  if (!path || path === '/') return '/';
+  return path.endsWith('/') ? path.slice(0, -1) : path;
+};
+
+const PATH_TO_TAB: Record<string, string> = Object.entries(TAB_TO_PATH).reduce((acc, [tab, path]) => {
+  acc[normalizePath(path)] = tab;
+  return acc;
+}, {} as Record<string, string>);
+
+const resolveTabFromPath = (path: string): string => {
+  const normalizedPath = normalizePath(path);
+  return PATH_TO_TAB[normalizedPath] || 'dashboard';
+};
+
+const isTabAllowedForRole = (tab: string, role: UserRole): boolean => {
+  if (tab === 'dashboard') return true;
+  return NAV_ITEMS.some((item) => item.id === tab && item.roles.includes(role));
+};
 
 
 
@@ -44,7 +84,7 @@ const App: React.FC = () => {
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState(() => resolveTabFromPath(window.location.pathname));
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -66,6 +106,22 @@ const App: React.FC = () => {
 
   const triedSchoolRefresh = useRef(false);
 
+  const navigateToTab = (tab: string, replace: boolean = false) => {
+    let nextTab = TAB_TO_PATH[tab] ? tab : 'dashboard';
+    if (currentUser && !isTabAllowedForRole(nextTab, currentUser.role)) {
+      nextTab = 'dashboard';
+    }
+    const nextPath = TAB_TO_PATH[nextTab] || '/';
+    setActiveTab(nextTab);
+    if (normalizePath(window.location.pathname) !== normalizePath(nextPath)) {
+      if (replace) {
+        window.history.replaceState({ tab: nextTab }, '', nextPath);
+      } else {
+        window.history.pushState({ tab: nextTab }, '', nextPath);
+      }
+    }
+  };
+
 
 
   // Chargement initial de l'utilisateur (seulement si pas déjà connecté)
@@ -81,9 +137,31 @@ const App: React.FC = () => {
     loadUser();
   }, [currentUser]); // ✅ Dépendance ajoutée
   useEffect(() => {
+    const handlePopState = () => {
+      setActiveTab(resolveTabFromPath(window.location.pathname));
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  useEffect(() => {
+    const expectedPath = TAB_TO_PATH[activeTab] || '/';
+    if (normalizePath(window.location.pathname) !== normalizePath(expectedPath)) {
+      window.history.replaceState({ tab: activeTab }, '', expectedPath);
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    if (isTabAllowedForRole(activeTab, currentUser.role)) return;
+    navigateToTab('dashboard', true);
+  }, [activeTab, currentUser]);
+
+  useEffect(() => {
     const onUnauthorized = () => {
       setCurrentUser(null);
-      setActiveTab('dashboard');
+      navigateToTab('dashboard', true);
       setIsInitialLoad(false);
     };
 
@@ -146,7 +224,7 @@ const App: React.FC = () => {
   const handleLoginSuccess = (user: User) => {
     // ✅ Forcer la mise à jour de l'état
     setCurrentUser(user);
-    setActiveTab('dashboard');
+    navigateToTab('dashboard', true);
     setIsInitialLoad(false); // ✅ Arrêter le chargement initial
   };
 
@@ -155,7 +233,7 @@ const App: React.FC = () => {
     // ✅ Nettoyer complètement l'état
     authApi.logout();
     setCurrentUser(null);
-    setActiveTab('dashboard');
+    navigateToTab('dashboard', true);
     setIsInitialLoad(false); // ✅ Réinitialiser l'état de chargement
   };
 
@@ -229,7 +307,7 @@ const App: React.FC = () => {
 
     switch (activeTab) {
 
-      case 'dashboard': return <Dashboard userRole={currentUser!.role} schoolId={currentUser.schoolId} />;
+      case 'dashboard': return <Dashboard userRole={currentUser!.role} schoolId={currentUser.schoolId} onNavigateTab={navigateToTab} />;
 
       case 'students': return <Students {...commonProps} />;
 
@@ -239,11 +317,24 @@ const App: React.FC = () => {
 
       case 'menus': return <Menus schoolId={currentUser.schoolId} userRole={currentUser.role} />;
 
-      case 'schools': return <Schools />;
+      case 'schools': return <Schools onNavigateTab={navigateToTab} />;
 
-      case 'payments': return <Payments schoolId={currentUser.schoolId} />;
+      case 'payments': return <Payments schoolId={currentUser.schoolId || ''} onNavigateTab={navigateToTab} />;
 
-      case 'users': return <Users />;
+      case 'tariffs':
+        if (currentUser.role !== UserRole.SCHOOL_ADMIN) {
+          return (
+            <div className="surface-card p-6">
+              <h2 className="section-title">Acces restreint</h2>
+              <p className="mt-2 text-sm text-slate-500">
+                La section Tarifs est reservee au School Admin.
+              </p>
+            </div>
+          );
+        }
+        return <Tariffs schoolId={currentUser.schoolId} schoolName={currentUser.schoolName} adminName={currentUser.name} userRole={currentUser.role} />;
+
+      case 'users': return <Users onNavigateTab={navigateToTab} />;
 
       case 'canteen-managers': return <CanteenManagers />;
 
@@ -285,7 +376,7 @@ const App: React.FC = () => {
 
         activeTab={activeTab} 
 
-        setActiveTab={(tab) => { setActiveTab(tab); }} 
+        setActiveTab={(tab) => { navigateToTab(tab); }} 
 
         userRole={currentUser.role} 
 
@@ -315,10 +406,12 @@ const App: React.FC = () => {
               <Menu size={24} />
 
             </button>
-
-
-
-
+            <div className="hidden md:block">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Canteen Management System</p>
+              <p className="text-sm font-bold text-slate-800">
+                {currentUser.role === UserRole.SUPER_ADMIN ? 'Dashboard Super Admin' : currentUser.schoolName || 'Dashboard'}
+              </p>
+            </div>
           </div>
 
 
@@ -327,7 +420,9 @@ const App: React.FC = () => {
 
             <div className="hidden sm:block text-right mr-2">
 
-              <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">{currentUser.schoolName || 'Administration Dabali'}</span>
+              <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">
+                {currentUser.role === UserRole.SUPER_ADMIN ? 'Administration Globale' : (currentUser.schoolName || 'Administration Dabali')}
+              </span>
 
             </div>
 
@@ -445,5 +540,11 @@ const App: React.FC = () => {
 };
 
 export default App;
+
+
+
+
+
+
 
 

@@ -4,7 +4,19 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteNotification = exports.markAllAsRead = exports.markAsRead = exports.getUnreadCount = exports.getAllNotifications = void 0;
+const mongoose_1 = __importDefault(require("mongoose"));
 const Notification_1 = __importDefault(require("../models/Notification"));
+const mapNotificationResponse = (notification) => {
+    const obj = notification?.toObject ? notification.toObject() : notification;
+    return {
+        ...obj,
+        id: obj?._id?.toString?.() || obj?.id || '',
+        _id: obj?._id?.toString?.() || obj?._id || obj?.id || '',
+        created_at: obj?.created_at || obj?.createdAt || null,
+        createdAt: obj?.createdAt || obj?.created_at || null,
+        read: !!obj?.read,
+    };
+};
 // Allows to get all notifications for a user
 const getAllNotifications = async (req, res) => {
     try {
@@ -31,7 +43,7 @@ const getAllNotifications = async (req, res) => {
             .skip(offset);
         res.json({
             success: true,
-            data: notifications
+            data: notifications.map(mapNotificationResponse)
         });
     }
     catch (error) {
@@ -70,6 +82,13 @@ const markAsRead = async (req, res) => {
     try {
         const { id } = req.params;
         const user_id = req.user?.id;
+        if (!mongoose_1.default.Types.ObjectId.isValid(id)) {
+            res.status(400).json({
+                success: false,
+                message: 'Notification id is invalid.'
+            });
+            return;
+        }
         const notification = await Notification_1.default.findOneAndUpdate({ _id: id, user_id }, { read: true, updated_at: new Date() }, { new: true }).populate('related_student_id', 'first_name last_name')
             .populate('related_menu_id', 'date meal_type description');
         if (!notification) {
@@ -82,7 +101,7 @@ const markAsRead = async (req, res) => {
         res.json({
             success: true,
             message: 'Notification marked as read.',
-            data: notification
+            data: mapNotificationResponse(notification)
         });
     }
     catch (error) {
@@ -121,6 +140,13 @@ const deleteNotification = async (req, res) => {
     try {
         const { id } = req.params;
         const user_id = req.user?.id;
+        if (!mongoose_1.default.Types.ObjectId.isValid(id)) {
+            res.status(400).json({
+                success: false,
+                message: 'Notification id is invalid.'
+            });
+            return;
+        }
         const notification = await Notification_1.default.findOneAndDelete({ _id: id, user_id });
         if (!notification) {
             res.status(404).json({
@@ -132,7 +158,7 @@ const deleteNotification = async (req, res) => {
         res.json({
             success: true,
             message: 'Notification deleted successfully.',
-            data: notification
+            data: mapNotificationResponse(notification)
         });
     }
     catch (error) {
